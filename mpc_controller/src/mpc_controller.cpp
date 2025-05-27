@@ -49,7 +49,7 @@ void MPCController::configure(
   C_ << Eigen::MatrixXd::Identity(ny_, nx_);
 
   A_blk_.resize(prediction_horizon_ * nx_, nx_);
-  B_blk_.resize(prediction_horizon_ * nx_, prediction_horizon_ * nx_);
+  B_blk_.resize(prediction_horizon_ * nx_, prediction_horizon_ * nu_);
 }
 
 void MPCController::cleanup(){}
@@ -74,6 +74,70 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
 {
   (void) robot_velocity;
   (void) goal_checker;
+
+  // Obtain reference states
+  // vector x_ref -> from path depending on horizon
+  // std::vector<geometry_msgs::msg::PoseStamped> X_ref(
+  //   global_plan_.poses.begin(),
+  //   global_plan_.poses.begin() + prediction_horizon_
+  // );
+
+
+  // Transform Quaternion into RPY
+  tf2::Quaternion q;
+  tf2::fromMsg(robot_pose.pose.orientation, q);
+  double roll, pitch, yaw;
+  tf2::Matrix3x3(q).getRPY(roll, pitch, yaw);
+
+  double dt = 0.05; // sampling time
+
+  // Define system dynamic
+  double a13 = -params_.max_lin_vel * std::sin(yaw) * dt;
+  double a23 = params_.max_lin_vel * std::cos(yaw) * dt;
+
+  A_ << 1, 0, a13,
+        0, 1, a23,
+        0, 0, 1;
+
+  double b11 = std::cos(yaw) * dt;
+  double b21 = std::sin(yaw) * dt;
+
+  B_ << b11, 0,
+        b21, 0,
+        0 , dt;
+
+  // =======================
+  // === System stacking ===
+  // =======================
+
+  // Stacking A matrix
+  Eigen::MatrixXd A_pow(A_.rows(), A_.cols());
+  A_pow << A_;
+
+  A_blk_.setZero();
+
+  for(int i = 0; i < prediction_horizon_; i++){
+    if(i) A_pow *= A_;
+    A_blk_.block(i * ny_, 0, ny_, nx_) = C_ * A_pow;
+  }
+
+  RCLCPP_INFO_STREAM_ONCE(logger_, "Block Matrix A: \n" << A_blk_);
+
+  // Stacking B matrix
+  A_pow.setZero();
+  B_blk_.setZero();
+
+  for(int i = 0; i < prediction_horizon_; i++){
+    
+    A_pow << Eigen::MatrixXd::Identity(ny_, nx_);
+    for(int j = 0; j < prediction_horizon_ - i; j++){
+      
+      if(j) A_pow *= A_;
+      B_blk_.block((j + i) * nx_, i * nu_, nx_, nu_) = C_ * A_pow * B_;
+    }
+  }
+
+  RCLCPP_INFO_STREAM_ONCE(logger_, "Block Matrix B: \n" << B_blk_);
  
 
   double linear_vel, angular_vel;
@@ -81,7 +145,6 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   linear_vel = 0.1;
   angular_vel = 0.0;
   
-  // Send calculated speed to nav2 controller_server
   geometry_msgs::msg::TwistStamped cmd_vel;
   cmd_vel.header.frame_id = robot_pose.header.frame_id;
   cmd_vel.header.stamp = clock_->now();
