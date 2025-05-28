@@ -61,6 +61,7 @@ protected:
   int nu_; //control input dimension
   int ny_; //output dimension
 
+  Eigen::VectorXd x_k_;
 
   Eigen::MatrixXd A_;
   Eigen::MatrixXd B_;
@@ -68,6 +69,13 @@ protected:
   
   Eigen::MatrixXd A_blk_;
   Eigen::MatrixXd B_blk_;
+
+  // Weighting matrices
+  Eigen::MatrixXd Q_;
+  Eigen::MatrixXd R_;
+
+  Eigen::MatrixXd Q_blk_;
+  Eigen::MatrixXd R_blk_;
   
   // Node parameters
   Parameters params_;

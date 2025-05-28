@@ -42,6 +42,8 @@ void MPCController::configure(
   nu_ = 2; //control input dimension
   ny_ = 3; //output dimension
 
+  x_k_.resize(nx_);
+
   // Set matrix dimensions
   A_.resize(nx_, nx_);
   B_.resize(nx_, nu_);
@@ -50,6 +52,15 @@ void MPCController::configure(
 
   A_blk_.resize(prediction_horizon_ * nx_, nx_);
   B_blk_.resize(prediction_horizon_ * nx_, prediction_horizon_ * nu_);
+
+  Q_.resize(nx_, nx_);
+  Q_ << Eigen::MatrixXd::Identity(nx_, nx_);
+
+  R_.resize(nu_, nu_);
+  R_ << Eigen::MatrixXd::Identity(nu_, nu_);
+
+  Q_blk_.resize(prediction_horizon_ * Q_.rows(), prediction_horizon_ * Q_.cols());
+  R_blk_.resize(prediction_horizon_ * R_.rows(), prediction_horizon_ * R_.cols());
 }
 
 void MPCController::cleanup(){}
@@ -82,6 +93,8 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   //   global_plan_.poses.begin() + prediction_horizon_
   // );
 
+  Eigen::VectorXd X_ref (prediction_horizon_ * nx_);
+  X_ref.setZero();
 
   // Transform Quaternion into RPY
   tf2::Quaternion q;
@@ -90,6 +103,10 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   tf2::Matrix3x3(q).getRPY(roll, pitch, yaw);
 
   double dt = 0.05; // sampling time
+
+  x_k_ << robot_pose.pose.position.x,
+         robot_pose.pose.position.y,
+         yaw;
 
   // Define system dynamic
   double a13 = -params_.max_lin_vel * std::sin(yaw) * dt;
@@ -138,7 +155,35 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   }
 
   RCLCPP_INFO_STREAM_ONCE(logger_, "Block Matrix B: \n" << B_blk_);
+
+  // ==================
+  // === QP problem ===
+  // ==================
+
+  // Represent Cost function as QP problem
+  // J = 0.5 u H u^T + f^T u
+  // Subject to:
+  // Du <= b
+
+  Eigen::VectorXd Ax_blk(prediction_horizon_ * nx_);
+  Ax_blk.setZero();
+
+  for(int i = 0; i < prediction_horizon_; i++){
+    Ax_blk.segment(i * ny_, nx_) = A_blk_.block(i * ny_, 0, ny_, nx_) * x_k_;
+  }
+
+  for(int i = 0; i < prediction_horizon_; i++){
+    Q_blk_.block(i * nx_, i * nx_, nx_, nx_) = Q_;
+    R_blk_.block(i * nu_, i * nu_, nu_, nu_) = R_;
+  }
+
+  Eigen::MatrixXd H = 2 * (B_blk_.transpose() * Q_blk_ * B_blk_ + R_blk_);  // Hessian matrixs
+  Eigen::VectorXd F = 2 * B_blk_.transpose() * Q_blk_ * (Ax_blk - X_ref);
+  
+  Eigen::VectorXd U (prediction_horizon_ * nu_);
  
+
+
 
   double linear_vel, angular_vel;
 
