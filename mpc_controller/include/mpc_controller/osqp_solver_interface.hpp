@@ -14,6 +14,7 @@ namespace osqp
 class OSQPSolverInterface {
 public:
   OSQPSolverInterface();
+  OSQPSolverInterface(const rclcpp::Logger &logger);
 
   Eigen::MatrixXd solve(
     const Eigen::MatrixXd& H, const Eigen::VectorXd& f,
@@ -23,7 +24,7 @@ private:
   
   OSQPCscMatrix toOSQPCscMatrix(const Eigen::MatrixXd& M);
   OSQPSolver* osqp_solver;
-  rclcpp::Logger logger_ {rclcpp::get_logger("DEBUG")};
+  rclcpp::Logger logger_ = rclcpp::get_logger("");
 
 };
 

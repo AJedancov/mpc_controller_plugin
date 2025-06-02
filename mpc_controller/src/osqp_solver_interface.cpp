@@ -5,6 +5,12 @@ osqp::OSQPSolverInterface::OSQPSolverInterface(){
   
 }
 
+
+osqp::OSQPSolverInterface::OSQPSolverInterface(const rclcpp::Logger &logger){
+  logger_ = logger;
+}
+
+
 Eigen::MatrixXd osqp::OSQPSolverInterface::solve(
   const Eigen::MatrixXd& H, const Eigen::VectorXd& f,
   const Eigen::VectorXd& lb, const Eigen::VectorXd& ub)

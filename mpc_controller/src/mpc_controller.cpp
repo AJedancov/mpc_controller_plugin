@@ -18,6 +18,7 @@ void MPCController::configure(
   plugin_name_ = name;
   (void) costmap_ros;
   
+  // logger_ = node->get_logger();
   clock_ = node->get_clock();
 
   params_callback_handle_ = node->add_on_set_parameters_callback(
@@ -189,7 +190,7 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
 
   // === Solve QP problem ===
   
-  osqp::OSQPSolverInterface qp_solver;
+  osqp::OSQPSolverInterface qp_solver(logger_);
 
   Eigen::MatrixXd u(prediction_horizon_, nu_);
   u = qp_solver.solve(H, f, lb, ub);

@@ -50,7 +50,9 @@ public:
 protected:
   rclcpp_lifecycle::LifecycleNode::WeakPtr node_;
   rclcpp::Clock::SharedPtr clock_;
-  rclcpp::Logger logger_ {rclcpp::get_logger("MPCController")};
+  rclcpp::Logger logger_ = rclcpp::get_logger("MPCController");
+
+
   std::string plugin_name_;
   std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
 
