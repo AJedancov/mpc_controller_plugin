@@ -18,7 +18,7 @@ public:
 
   Eigen::MatrixXd solve(
     const Eigen::MatrixXd& H, const Eigen::VectorXd& f,
-    const Eigen::VectorXd& lb, const Eigen::VectorXd& ub);
+    const Eigen::MatrixXd& D, const Eigen::VectorXd& lb, const Eigen::VectorXd& ub);
 
 private:
   

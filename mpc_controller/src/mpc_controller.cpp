@@ -183,6 +183,12 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   Eigen::VectorXd f(prediction_horizon_ * nu_);
   f = 2 * B_blk_.transpose() * Q_blk_ * (Ax_blk - X_ref); 
   
+  Eigen::MatrixXd D(prediction_horizon_ * nu_, nu_);
+
+  for(int i = 0; i < prediction_horizon_; i++){
+    D.block(i * nu_, 0, nu_, nu_) = Eigen::MatrixXd::Identity(nu_, nu_);
+  }
+
   Eigen::VectorXd lb (prediction_horizon_ * nu_);
   Eigen::VectorXd ub (prediction_horizon_ * nu_);
   
@@ -199,7 +205,7 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   osqp::OSQPSolverInterface qp_solver(logger_);
 
   Eigen::MatrixXd u(prediction_horizon_, nu_);
-  u = qp_solver.solve(H, f, lb, ub);
+  u = qp_solver.solve(H, f, D, lb, ub);
 
   double linear_vel, angular_vel;
   // linear_vel = coeff(0, 0);
