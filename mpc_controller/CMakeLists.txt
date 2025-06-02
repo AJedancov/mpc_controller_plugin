@@ -20,7 +20,6 @@ find_package(tf2_geometry_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(osqp REQUIRED)
-# find_package(OsqpEigen REQUIRED)
 
 set(dependencies
   rclcpp
@@ -36,8 +35,6 @@ set(dependencies
   tf2_geometry_msgs
   tf2_ros
   Eigen3
-  osqp
-  # OsqpEigen
 )
 
 include_directories(${PROJECT_SOURCE_DIR}/include)
@@ -48,6 +45,7 @@ add_library(mpc_controller SHARED
 )
 
 ament_target_dependencies(mpc_controller PUBLIC ${dependencies})
+target_link_libraries(mpc_controller PUBLIC osqp::osqp)
 
 pluginlib_export_plugin_description_file(
   nav2_core
