@@ -51,11 +51,11 @@ void MPCController::configure(
   C_.resize(ny_, nx_);
   C_ << Eigen::MatrixXd::Identity(ny_, nx_);
 
-  A_blk_.resize(prediction_horizon_ * nx_, nx_);
-  B_blk_.resize(prediction_horizon_ * nx_, prediction_horizon_ * nu_);
+  A_blk_.resize(prediction_horizon_ * ny_, nx_);
+  B_blk_.resize(prediction_horizon_ * ny_, prediction_horizon_ * nu_);
 
-  Q_.resize(nx_, nx_);
-  Q_ << Eigen::MatrixXd::Identity(nx_, nx_);
+  Q_.resize(ny_, ny_);
+  Q_ << Eigen::MatrixXd::Identity(ny_, ny_);
 
   R_.resize(nu_, nu_);
   R_ << Eigen::MatrixXd::Identity(nu_, nu_);
@@ -163,7 +163,7 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   // Subject to:
   // Du <= b
 
-  Eigen::VectorXd Ax_blk(prediction_horizon_ * nx_);
+  Eigen::VectorXd Ax_blk(prediction_horizon_ * ny_);
   Ax_blk.setZero();
 
   for(int i = 0; i < prediction_horizon_; i++){
@@ -175,8 +175,13 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
     R_blk_.block(i * nu_, i * nu_, nu_, nu_) = R_;
   }
 
-  Eigen::MatrixXd H = 2 * (B_blk_.transpose() * Q_blk_ * B_blk_ + R_blk_);  // Hessian matrixs
-  Eigen::VectorXd f = 2 * B_blk_.transpose() * Q_blk_ * (Ax_blk - X_ref); // linear term
+  // Hessian matrixs
+  Eigen::MatrixXd H(prediction_horizon_ * nu_, prediction_horizon_ * nu_); 
+  H = 2 * (B_blk_.transpose() * Q_blk_ * B_blk_ + R_blk_);  
+
+  // Linear term
+  Eigen::VectorXd f(prediction_horizon_ * nu_);
+  f = 2 * B_blk_.transpose() * Q_blk_ * (Ax_blk - X_ref); 
   
   Eigen::VectorXd lb (prediction_horizon_ * nu_);
   Eigen::VectorXd ub (prediction_horizon_ * nu_);
@@ -186,7 +191,8 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
     ub.segment(i * nu_, nu_) << params_.max_lin_vel, params_.max_ang_vel;
   }
 
-  RCLCPP_INFO_STREAM_ONCE(logger_, "Block Matrix H: \n" << H);
+  // RCLCPP_INFO_STREAM_ONCE(logger_, "Block Matrix H: \n" << H);
+  // RCLCPP_INFO_STREAM_ONCE(logger_, "Linear term f: \n" << f);
 
   // === Solve QP problem ===
   
