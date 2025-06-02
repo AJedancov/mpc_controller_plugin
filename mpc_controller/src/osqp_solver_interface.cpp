@@ -17,15 +17,13 @@ Eigen::MatrixXd osqp::OSQPSolverInterface::solve(
 {
 
   const OSQPCscMatrix H_osqp_csc = toOSQPCscMatrix(H);
-  // const OSQPFloat* f_osqp = f.data();
-  // const OSQPCscMatrix* A_osqp = nullptr;
-  // const OSQPFloat* lb_osqp = nullptr;
-  // const OSQPFloat* ub_osqp = nullptr;
-  // const OSQPInt m = 1;
-  // const OSQPInt n = 2;
-  // OSQPSettings* settings = OSQPSettings_new();
-
-  // osqp_set_default_settings(settings);
+  const OSQPFloat* f_osqp = f.data();
+  const OSQPCscMatrix* A_osqp = nullptr;
+  const OSQPFloat* lb_osqp = nullptr;
+  const OSQPFloat* ub_osqp = nullptr;
+  const OSQPInt m = 1;
+  const OSQPInt n = 2;
+  OSQPSettings* settings = OSQPSettings_new();
 
   OSQPInt exitflag = 0;
   // exitflag = osqp_setup(&osqp_solver, &H_osqp_csc, f_osqp, A_osqp, lb_osqp, ub_osqp, m, n, settings);
@@ -41,29 +39,65 @@ OSQPCscMatrix osqp::OSQPSolverInterface::toOSQPCscMatrix(const Eigen::MatrixXd& 
   Eigen::SparseMatrix<double, Eigen::ColMajor> M_csc = M.sparseView();
   M_csc.makeCompressed();
 
+  int M_rows = M.rows(), M_cols = M.cols(); 
+  int M_non_zeros = M.nonZeros();
+
   std::vector<OSQPInt> osqp_pointers;
   std::vector<OSQPInt> osqp_indices;
   std::vector<OSQPFloat> osqp_values;
 
-  // int *outerIndexPtr = M_csc.outerIndexPtr(); // Pointers 
-  // int *innerIndexPtr = M_csc.innerIndexPtr(); // Row indices
-  // double *valuePtr = M_csc.valuePtr(); // Values
+  osqp_pointers.reserve(M_cols);
+  osqp_indices.reserve(M_non_zeros);
+  osqp_values.reserve(M_non_zeros);
 
-  // for(int i; i < M.cols(); i++){
-  //   osqp_pointers[i] = static_cast<OSQPInt>(outerIndexPtr[i]);
-  //   osqp_indices[i] = static_cast<OSQPInt>(innerIndexPtr[i]);
-  //   osqp_values[i] = static_cast<OSQPInt>(valuePtr[i]);
+  int *outerIndexPtr = M_csc.outerIndexPtr(); // Pointers 
+  int *innerIndexPtr = M_csc.innerIndexPtr(); // Row indices
+  double *valuePtr = M_csc.valuePtr(); // Values
+
+  // std::stringstream sss;
+  // sss << "\nPointers: "; 
+  // for(int i = 0; i < M_cols; i++){
+  //   sss << outerIndexPtr[i] << " ";
+  // }
+  
+  // sss << "\nRow indices: "; 
+  // for(int i = 0; i < M_non_zeros; i++){
+  //   sss << innerIndexPtr[i] << " ";
+  // }
+  
+  // sss << "\nValues: "; 
+  // for(int i = 0; i < M_non_zeros; i++){
+  //   sss << valuePtr[i] << " ";
+  // }
+  // RCLCPP_INFO_STREAM_ONCE(logger_, sss.str());
+  
+  for(int i = 0; i < M_cols; i++){
+    osqp_pointers[i] = static_cast<OSQPInt>(outerIndexPtr[i]);
+  }
+
+  for(int i = 0; i < M_non_zeros; i++){
+    osqp_indices[i] = static_cast<OSQPInt>(innerIndexPtr[i]);
+    osqp_values[i] = static_cast<OSQPFloat>(valuePtr[i]);
+  }
+
+  // std::stringstream ss1;
+  // ss1 << "\nOsqp_pointers: ";
+  // for(int i = 0; i < M.cols(); i++){
+  //    ss1 << osqp_pointers[i] << " ";
   // }
 
+  // RCLCPP_INFO_STREAM_ONCE(logger_, ss1.str());
+
+
   OSQPCscMatrix M_osqp_csc;
-  // M_osqp_csc.m = M_csc.rows();
-  // M_osqp_csc.n = M_csc.cols();
-  // M_osqp_csc.p = osqp_pointers.data();
-  // M_osqp_csc.i = osqp_indices.data();
-  // M_osqp_csc.x = osqp_values.data();
-  // M_osqp_csc.nzmax = M_csc.nonZeros();
-  // M_osqp_csc.nz = -1;   // -1 for csc
-  // M_osqp_csc.owned = 0; // 0 if owned by the user
+  M_osqp_csc.m = M_rows;
+  M_osqp_csc.n = M_cols;
+  M_osqp_csc.p = osqp_pointers.data();
+  M_osqp_csc.i = osqp_indices.data();
+  M_osqp_csc.x = osqp_values.data();
+  M_osqp_csc.nzmax = M_non_zeros;
+  M_osqp_csc.nz = -1;   // -1 for csc
+  M_osqp_csc.owned = 0; // 0 if owned by the user
 
 
   return M_osqp_csc;
