@@ -96,11 +96,8 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   Eigen::VectorXd X_ref (prediction_horizon_ * nx_);
   X_ref.setZero();
 
-  // Transform Quaternion into RPY
-  tf2::Quaternion q;
-  tf2::fromMsg(robot_pose.pose.orientation, q);
-  double roll, pitch, yaw;
-  tf2::Matrix3x3(q).getRPY(roll, pitch, yaw);
+  // Get Yaw from Quaternion 
+  double yaw = tf2::getYaw(robot_pose.pose.orientation);
 
   double dt = 0.05; // sampling time
 
@@ -178,14 +175,28 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   }
 
   Eigen::MatrixXd H = 2 * (B_blk_.transpose() * Q_blk_ * B_blk_ + R_blk_);  // Hessian matrixs
-  Eigen::VectorXd F = 2 * B_blk_.transpose() * Q_blk_ * (Ax_blk - X_ref);
+  Eigen::VectorXd f = 2 * B_blk_.transpose() * Q_blk_ * (Ax_blk - X_ref); // linear term
   
-  Eigen::VectorXd U (prediction_horizon_ * nu_);
- 
+  Eigen::VectorXd lb (prediction_horizon_ * nu_);
+  Eigen::VectorXd ub (prediction_horizon_ * nu_);
+  
+  for(int i = 0; i < prediction_horizon_; i++){
+    lb.segment(i * nu_, nu_) << params_.min_lin_vel, params_.min_ang_vel;
+    ub.segment(i * nu_, nu_) << params_.max_lin_vel, params_.max_ang_vel;
+  }
 
+  RCLCPP_INFO_STREAM_ONCE(logger_, "Block Matrix H: \n" << H);
 
+  // === Solve QP problem ===
+  
+  osqp::OSQPSolverInterface qp_solver;
+
+  Eigen::MatrixXd u(prediction_horizon_, nu_);
+  u = qp_solver.solve(H, f, lb, ub);
 
   double linear_vel, angular_vel;
+  // linear_vel = coeff(0, 0);
+  // angular_vel = coeff(0, 1);
 
   linear_vel = 0.1;
   angular_vel = 0.0;

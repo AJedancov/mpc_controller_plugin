@@ -18,6 +18,9 @@ find_package(pluginlib REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
+find_package(Eigen3 REQUIRED)
+find_package(osqp REQUIRED)
+# find_package(OsqpEigen REQUIRED)
 
 set(dependencies
   rclcpp
@@ -32,12 +35,16 @@ set(dependencies
   tf2
   tf2_geometry_msgs
   tf2_ros
+  Eigen3
+  osqp
+  # OsqpEigen
 )
 
 include_directories(${PROJECT_SOURCE_DIR}/include)
 
 add_library(mpc_controller SHARED 
   ${PROJECT_SOURCE_DIR}/src/mpc_controller.cpp
+  ${PROJECT_SOURCE_DIR}/src/osqp_solver_interface.cpp
 )
 
 ament_target_dependencies(mpc_controller PUBLIC ${dependencies})
