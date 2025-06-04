@@ -136,7 +136,7 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
     A_blk_.block(i * ny_, 0, ny_, nx_) = C_ * A_pow;
   }
 
-  RCLCPP_INFO_STREAM_ONCE(logger_, "Block Matrix A: \n" << A_blk_);
+  // RCLCPP_INFO_STREAM_ONCE(logger_, "Block Matrix A: \n" << A_blk_);
 
   // Stacking B matrix
   A_pow.setZero();
@@ -152,7 +152,7 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
     }
   }
 
-  RCLCPP_INFO_STREAM_ONCE(logger_, "Block Matrix B: \n" << B_blk_);
+  // RCLCPP_INFO_STREAM_ONCE(logger_, "Block Matrix B: \n" << B_blk_);
 
   // ==================
   // === QP problem ===
@@ -204,13 +204,12 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   
   osqp::OSQPSolverInterface qp_solver(logger_);
 
-  Eigen::MatrixXd u(prediction_horizon_, nu_);
-  u = qp_solver.solve(H, f, D, lb, ub);
+  Eigen::VectorXd u(prediction_horizon_ * nu_);
+  qp_solver.solve(H, f, D, lb, ub , u);
 
+  RCLCPP_INFO_STREAM_ONCE(logger_, "\nSolution u:\n" << u[0] << "\n" << u[1]);
+  
   double linear_vel, angular_vel;
-  // linear_vel = coeff(0, 0);
-  // angular_vel = coeff(0, 1);
-
   linear_vel = 0.1;
   angular_vel = 0.0;
   

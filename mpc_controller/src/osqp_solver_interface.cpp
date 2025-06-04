@@ -11,9 +11,10 @@ osqp::OSQPSolverInterface::OSQPSolverInterface(const rclcpp::Logger &logger){
 }
 
 
-Eigen::MatrixXd osqp::OSQPSolverInterface::solve(
+void osqp::OSQPSolverInterface::solve(
   Eigen::MatrixXd& H, const Eigen::VectorXd& f,
-  Eigen::MatrixXd& D, const Eigen::VectorXd& lb, const Eigen::VectorXd& ub)
+  Eigen::MatrixXd& D, const Eigen::VectorXd& lb, const Eigen::VectorXd& ub, 
+  Eigen::VectorXd& u)
 { 
 
   OSQPCscMatrixHolder H_osqp_csc;
@@ -31,7 +32,7 @@ Eigen::MatrixXd osqp::OSQPSolverInterface::solve(
 
   OSQPInt exitflag = 0;
   exitflag = osqp_setup(
-    &osqp_solver, 
+    &osqp_solver_,
     H_osqp_csc.matrix_ptr_.get(), 
     f_osqp, 
     H_osqp_csc.matrix_ptr_.get(), 
@@ -42,11 +43,16 @@ Eigen::MatrixXd osqp::OSQPSolverInterface::solve(
     settings
   );
 
-  RCLCPP_INFO_STREAM_ONCE(logger_, "osqp_setup exitflag: " << exitflag);
-  // osqp_solve(osqp_solver);
+  // RCLCPP_INFO_STREAM_ONCE(logger_, "osqp_setup exitflag: " << exitflag);
+  
+  if(!exitflag){
+    exitflag = osqp_solve(osqp_solver_);
+  }
+  // RCLCPP_INFO_STREAM_ONCE(logger_, "osqp_solve exitflag: " << exitflag);
 
-  Eigen::MatrixXd u;
-  return u;
+  for(int i = 0; i < f.rows(); i++){
+    u[i] = osqp_solver_->solution->x[i];
+  }
 }
 
 

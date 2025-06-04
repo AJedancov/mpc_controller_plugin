@@ -23,14 +23,14 @@ public:
   OSQPSolverInterface();
   OSQPSolverInterface(const rclcpp::Logger &logger);
 
-  Eigen::MatrixXd solve(
+  void solve(
     Eigen::MatrixXd& H, const Eigen::VectorXd& f,
-    Eigen::MatrixXd& D, const Eigen::VectorXd& lb, const Eigen::VectorXd& ub);
+    Eigen::MatrixXd& D, const Eigen::VectorXd& lb, const Eigen::VectorXd& ub,
+    Eigen::VectorXd& u);
 
 private:
-  
   void convert_to_osqp_csc_matrix(Eigen::MatrixXd& M, OSQPCscMatrixHolder& M_osqp_csc);
-  OSQPSolver* osqp_solver;
+  OSQPSolver* osqp_solver_;
   rclcpp::Logger logger_ = rclcpp::get_logger("");
 
 };
