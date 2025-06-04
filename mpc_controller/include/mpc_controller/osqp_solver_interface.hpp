@@ -11,18 +11,25 @@
 namespace osqp
 {
 
+struct OSQPCscMatrixHolder {
+  std::unique_ptr<OSQPCscMatrix> matrix_ptr_ = std::make_unique<OSQPCscMatrix>();
+  std::vector<OSQPInt> pointers_;
+  std::vector<OSQPInt> indices_;
+  std::vector<OSQPFloat> values_;
+};
+
 class OSQPSolverInterface {
 public:
   OSQPSolverInterface();
   OSQPSolverInterface(const rclcpp::Logger &logger);
 
   Eigen::MatrixXd solve(
-    const Eigen::MatrixXd& H, const Eigen::VectorXd& f,
-    const Eigen::MatrixXd& D, const Eigen::VectorXd& lb, const Eigen::VectorXd& ub);
+    Eigen::MatrixXd& H, const Eigen::VectorXd& f,
+    Eigen::MatrixXd& D, const Eigen::VectorXd& lb, const Eigen::VectorXd& ub);
 
 private:
   
-  OSQPCscMatrix toOSQPCscMatrix(const Eigen::MatrixXd& M);
+  void convert_to_osqp_csc_matrix(Eigen::MatrixXd& M, OSQPCscMatrixHolder& M_osqp_csc);
   OSQPSolver* osqp_solver;
   rclcpp::Logger logger_ = rclcpp::get_logger("");
 
