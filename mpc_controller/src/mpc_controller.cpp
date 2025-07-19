@@ -44,6 +44,7 @@ void MPCController::configure(
   ny_ = 3; //output dimension
 
   x_k_.resize(nx_);
+  X_ref_.resize(prediction_horizon_ * nx_);
 
   // Set matrix dimensions
   A_.resize(nx_, nx_);
@@ -76,7 +77,7 @@ void MPCController::setSpeedLimit(const double &speed_limit, const bool &percent
 }
 
 void MPCController::setPlan(const nav_msgs::msg::Path& path){
-  global_plan_ = path;
+  global_path_ = path;
 }
 
 geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
@@ -87,29 +88,89 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   (void) robot_velocity;
   (void) goal_checker;
 
-  // Obtain reference states
-  // vector x_ref -> from path depending on horizon
-  // std::vector<geometry_msgs::msg::PoseStamped> X_ref(
-  //   global_plan_.poses.begin(),
-  //   global_plan_.poses.begin() + prediction_horizon_
-  // );
+  // nav_msgs::msg::Path pruned_path = prunePath(global_path_);
 
-  Eigen::VectorXd X_ref (prediction_horizon_ * nx_);
-  X_ref.setZero();
+  // int global_path_section_num = global_path_.poses.size() - 1;
+  // Eigen::VectorXd global_path_section_len(global_path_section_num);
 
-  // Get Yaw from Quaternion 
+  // int closest_waypoint_idx = findClosestWaypointIndex();
+
+  int closest_waypoint_idx = 0;
+
+  int waypoints_num = global_path_.poses.size();
+  std::vector<double> s_gp_cum(waypoints_num, 0);
+  for(int i = 1; i < waypoints_num; i++){
+    double dx = global_path_.poses[i].pose.position.x - global_path_.poses[i - 1].pose.position.x;
+    double dy = global_path_.poses[i].pose.position.y - global_path_.poses[i - 1].pose.position.y;
+    s_gp_cum[i] = s_gp_cum[i - 1] + std::hypot(dx, dy);
+  }
+
+  RCLCPP_INFO_STREAM(logger_, "linear_vel: " << linear_vel);
+
+  double s_pr = linear_vel * dt; // predicted arc length
+  int segments_num = s_pr <= 0 ? 0 : std::floor(s_gp_cum.back() / s_pr);
+  int fitted_points_num = std::min(prediction_horizon_, segments_num) + 1;
+  
+  RCLCPP_INFO_STREAM(logger_, "s_pr: " << s_pr);
+  RCLCPP_INFO_STREAM(logger_, "segments_num: " << segments_num);
+  RCLCPP_INFO_STREAM(logger_, "fitted_points_num: " << fitted_points_num);
+  
+
+  std::vector<double> s_pr_cum(fitted_points_num, 0);
+  for(int i = 1; i < fitted_points_num; i++){
+    s_pr_cum[i] = s_pr_cum[i - 1] + s_pr;
+  }
+
+  std::stringstream ss;
+  std::copy(s_pr_cum.begin(), s_pr_cum.end(), std::ostream_iterator<double>(ss, " "));
+  RCLCPP_INFO_STREAM(logger_, "arcl: " << ss.str());
+
+  X_ref_.setZero();
+  int s_gp_idx = 1;
+  int s_pr_idx = 1;
+
+  while(s_pr_idx < fitted_points_num){
+
+    while(s_gp_cum[s_gp_idx] < s_pr_cum[s_pr_idx] && s_gp_idx < waypoints_num){
+      s_gp_idx++;
+    }
+
+    double t = (s_pr_cum[s_pr_idx] - s_gp_cum[s_gp_idx - 1]) / (s_gp_cum[s_gp_idx] - s_gp_cum[s_gp_idx - 1]);
+    
+    double x_k0 = global_path_.poses[closest_waypoint_idx + s_gp_idx - 1].pose.position.x;
+    double x_k1 = global_path_.poses[closest_waypoint_idx + s_gp_idx].pose.position.x;
+    double x_ref = x_k0 + t * (x_k1 - x_k0);
+
+    double y_k0 = global_path_.poses[closest_waypoint_idx + s_gp_idx - 1].pose.position.y;
+    double y_k1 = global_path_.poses[closest_waypoint_idx + s_gp_idx].pose.position.y;
+    double y_ref = y_k0 + t * (y_k1 - y_k0);
+
+    double theta_ref = 0.0;
+
+    X_ref_.segment((s_pr_idx - 1) * nx_, nx_) << x_ref, y_ref, theta_ref;
+
+    RCLCPP_INFO_STREAM(logger_, "s_gp_idx: " << s_gp_idx);
+    RCLCPP_INFO_STREAM(logger_, "s_pr_idx: " << s_pr_idx);
+
+    s_pr_idx++;
+  }
+
+  RCLCPP_INFO_STREAM(logger_, "X_ref_: \n" << X_ref_);
+  
+  // tf2::getYaw(global_path_.poses[i].pose.orientation);
+
+  // TODO: express coordinates in a moving coordinate system instead of global
+
   double yaw = tf2::getYaw(robot_pose.pose.orientation);
-
-  double dt = 0.05; // sampling time
-
   x_k_ << robot_pose.pose.position.x,
-         robot_pose.pose.position.y,
-         yaw;
+          robot_pose.pose.position.y,
+          yaw;
 
   // Define system dynamic
   double a13 = -params_.max_lin_vel * std::sin(yaw) * dt;
   double a23 = params_.max_lin_vel * std::cos(yaw) * dt;
 
+  // TODO: check dt in matrix
   A_ << 1, 0, a13,
         0, 1, a23,
         0, 0, 1;
@@ -181,7 +242,7 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
 
   // Linear term
   Eigen::VectorXd f(prediction_horizon_ * nu_);
-  f = 2 * B_blk_.transpose() * Q_blk_ * (Ax_blk - X_ref); 
+  f = 2 * B_blk_.transpose() * Q_blk_ * (Ax_blk - X_ref_); 
   
   Eigen::MatrixXd D(prediction_horizon_ * nu_, nu_);
 
@@ -207,11 +268,13 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   Eigen::VectorXd u(prediction_horizon_ * nu_);
   qp_solver.solve(H, f, D, lb, ub , u);
 
-  RCLCPP_INFO_STREAM_ONCE(logger_, "\nSolution u:\n" << u[0] << "\n" << u[1]);
-  
-  double linear_vel, angular_vel;
-  linear_vel = 0.1;
-  angular_vel = 0.0;
+  // RCLCPP_INFO_STREAM(logger_, "\nControl u:\n" << u[0] << "\n" << u[1]);
+
+  linear_vel = u[0];
+  angular_vel = u[1];
+
+  // linear_vel = 0.0;
+  // angular_vel = 0.0;
   
   geometry_msgs::msg::TwistStamped cmd_vel;
   cmd_vel.header.frame_id = robot_pose.header.frame_id;

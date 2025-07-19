@@ -56,7 +56,7 @@ protected:
   std::string plugin_name_;
   std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
 
-  nav_msgs::msg::Path global_plan_;
+  nav_msgs::msg::Path global_path_;
 
   int prediction_horizon_;
   int control_horizon_;
@@ -66,6 +66,7 @@ protected:
   int ny_; //output dimension
 
   Eigen::VectorXd x_k_;
+  Eigen::VectorXd X_ref_;
 
   Eigen::MatrixXd A_;
   Eigen::MatrixXd B_;
@@ -80,6 +81,10 @@ protected:
 
   Eigen::MatrixXd Q_blk_;
   Eigen::MatrixXd R_blk_;
+
+  double dt = 0.1; // sampling time
+  double linear_vel = 0.5;
+  double angular_vel = 1;
   
   // Node parameters
   Parameters params_;
