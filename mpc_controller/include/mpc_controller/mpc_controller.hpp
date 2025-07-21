@@ -3,6 +3,7 @@
 #include "pluginlib/class_loader.hpp"
 #include "pluginlib/class_list_macros.hpp"
 #include "rcl_interfaces/msg/set_parameters_result.hpp"
+#include "geometry_msgs/msg/point_stamped.hpp"
 
 #include "mpc_controller/osqp_solver_interface.hpp"
 #include <Eigen/Core>
@@ -113,6 +114,9 @@ private:
     result.successful = true;
     return result;
   }
+
+  std::shared_ptr<rclcpp::Publisher<geometry_msgs::msg::PointStamped>> closest_waypoint_publisher_;
+
 };
 
 } // namespace mpc_controller
