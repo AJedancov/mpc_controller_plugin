@@ -38,6 +38,7 @@ void MPCController::configure(
   node->get_parameter(plugin_name_ + ".local_frame", params_.local_frame);
 
   closest_waypoint_publisher_ = node->create_publisher<geometry_msgs::msg::PointStamped>("closest_point", 10);
+  lerp_ref_path_publisher_ = node->create_publisher<nav_msgs::msg::Path>("reference_path", 10);
 
   prediction_horizon_ = 5;
 
@@ -99,6 +100,7 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
 
 
   int waypoints_num = global_path_.poses.size();
+  RCLCPP_INFO_STREAM(logger_, "waypoints_num: " << waypoints_num);
 
   int closest_waypoint_idx = 0;
   double closest_waypoint_dist = 1e3;
@@ -131,7 +133,6 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
     s_path_cum[i] = s_path_cum[i - 1] + std::hypot(dx, dy);
   }
 
-  // RCLCPP_INFO_STREAM(logger_, "linear_vel: " << linear_vel);
 
   // double s_predict = linear_vel * dt; // predicted arc lengths
   double s_predict = 0.1;
@@ -156,6 +157,11 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   int s_path_idx = 1;
   int s_predict_idx = 1;
 
+  nav_msgs::msg::Path lerp_ref_path;
+  lerp_ref_path.header.frame_id = global_path_.header.frame_id;
+  lerp_ref_path.header.stamp = global_path_.header.stamp;
+  lerp_ref_path.poses.resize(prediction_horizon_);
+
   while(s_predict_idx < fitted_points_num){
 
     while(s_path_cum[s_path_idx] < s_predict_cum[s_predict_idx] && s_path_idx < waypoints_num){
@@ -173,16 +179,20 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
     double y_ref = y_k0 + t * (y_k1 - y_k0);
 
     double theta_ref = 0.0;
+    // double theta_ref = tf2::getYaw(global_path_.poses[closest_waypoint_idx + s_path_idx].pose.orientation);
+
+    lerp_ref_path.poses[s_predict_idx - 1].pose.position.x = x_ref;
+    lerp_ref_path.poses[s_predict_idx - 1].pose.position.y = y_ref;
 
     X_ref_.segment((s_predict_idx - 1) * nx_, nx_) << x_ref, y_ref, theta_ref;
 
     RCLCPP_INFO_STREAM(logger_, "s_path_idx: " << s_path_idx);
-    RCLCPP_INFO_STREAM(logger_, "s_predict_idx: " << s_predict_idx);
 
     s_predict_idx++;
   }
 
   RCLCPP_INFO_STREAM(logger_, "X_ref_: \n" << X_ref_);
+  lerp_ref_path_publisher_->publish(lerp_ref_path);
   
   // tf2::getYaw(global_path_.poses[i].pose.orientation);
 

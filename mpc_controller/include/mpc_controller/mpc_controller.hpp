@@ -4,6 +4,7 @@
 #include "pluginlib/class_list_macros.hpp"
 #include "rcl_interfaces/msg/set_parameters_result.hpp"
 #include "geometry_msgs/msg/point_stamped.hpp"
+#include "nav_msgs/msg/path.h"
 
 #include "mpc_controller/osqp_solver_interface.hpp"
 #include <Eigen/Core>
@@ -116,6 +117,7 @@ private:
   }
 
   std::shared_ptr<rclcpp::Publisher<geometry_msgs::msg::PointStamped>> closest_waypoint_publisher_;
+  std::shared_ptr<rclcpp::Publisher<nav_msgs::msg::Path>> lerp_ref_path_publisher_;
 
 };
 
