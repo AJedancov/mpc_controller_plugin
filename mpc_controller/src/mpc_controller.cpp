@@ -59,10 +59,10 @@ void MPCController::configure(
   B_blk_.resize(prediction_horizon_ * ny_, prediction_horizon_ * nu_);
 
   Q_.resize(ny_, ny_);
-  Q_ << Eigen::MatrixXd::Identity(ny_, ny_);
+  Q_ << Eigen::MatrixXd::Identity(ny_, ny_) * 10;
 
   R_.resize(nu_, nu_);
-  R_ << Eigen::MatrixXd::Identity(nu_, nu_);
+  R_ << Eigen::MatrixXd::Identity(nu_, nu_) * 0.1;
 
   Q_blk_.resize(prediction_horizon_ * Q_.rows(), prediction_horizon_ * Q_.cols());
   R_blk_.resize(prediction_horizon_ * R_.rows(), prediction_horizon_ * R_.cols());
@@ -104,12 +104,19 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
 
   int closest_waypoint_idx = 0;
   double closest_waypoint_dist = 1e3;
-  for(int i = 0; i < waypoints_num; i++){
+  for(int i = 0; i < waypoints_num - 1; i++){
     double dx = robot_pose.pose.position.x - global_path_.poses[i].pose.position.x;
     double dy = robot_pose.pose.position.y - global_path_.poses[i].pose.position.y;
+    
     double hypot = std::hypot(dx, dy);
     if (hypot < closest_waypoint_dist){
-      closest_waypoint_idx = i;
+      double dx_wp = global_path_.poses[i + 1].pose.position.x - global_path_.poses[i].pose.position.x;
+      double dy_wp = global_path_.poses[i + 1].pose.position.y - global_path_.poses[i].pose.position.y;
+      std::vector<double> v2 = {dx_wp, dy_wp};
+      std::vector<double> v1 = {dx, dy};
+      double dot_prod = std::inner_product(v1.begin(), v1.end(), v2.begin(), 0.0);
+
+      closest_waypoint_idx = dot_prod <= 0 ? i : i + 1;
       closest_waypoint_dist = hypot;
     }
   }
@@ -135,7 +142,7 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
 
 
   // double s_predict = linear_vel * dt; // predicted arc lengths
-  double s_predict = 0.1;
+  double s_predict = 0.025;
   int segments_num = s_predict <= 0.0 ? 0.0 : std::floor(s_path_cum.back() / s_predict);
   int fitted_points_num = std::min(prediction_horizon_, segments_num) + 1;
   
@@ -191,6 +198,35 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
     s_predict_idx++;
   }
 
+  
+  // nav_msgs::msg::Path lerp_ref_path;
+  // lerp_ref_path.header.frame_id = global_path_.header.frame_id;
+  // lerp_ref_path.header.stamp = global_path_.header.stamp;
+  // lerp_ref_path.poses.resize(prediction_horizon_);
+
+  // for(int i = 0; i < prediction_horizon_; i++){
+    
+  //   double dx_ref = 0.0;
+  //   double dy_ref = 0.0;
+  //   double theta_ref = 0.0;
+  //   tf2::Quaternion q;
+
+  //   if(i == prediction_horizon_ - 1){
+  //     theta_ref = 0.0;
+  //   }else{
+  //     dx_ref = x_refs[i + 1] - x_refs[i];
+  //     dy_ref = y_refs[i + 1] - y_refs[i];
+  //     theta_ref = std::atan2(dy_ref, dx_ref);
+  //   }
+    
+  //   X_ref_.segment(i * nx_, nx_) << x_refs[i], y_refs[i], theta_ref;
+
+  //   lerp_ref_path.poses[i].pose.position.x = x_refs[i];
+  //   lerp_ref_path.poses[i].pose.position.y = y_refs[i];
+  //   q.setRPY(0, 0, theta_ref);
+  //   lerp_ref_path.poses[i].pose.orientation = tf2::toMsg(q);
+  // }
+
   RCLCPP_INFO_STREAM(logger_, "X_ref_: \n" << X_ref_);
   lerp_ref_path_publisher_->publish(lerp_ref_path);
   
@@ -207,7 +243,6 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   double a13 = -params_.max_lin_vel * std::sin(yaw) * dt;
   double a23 = params_.max_lin_vel * std::cos(yaw) * dt;
 
-  // TODO: check dt in matrix
   A_ << 1, 0, a13,
         0, 1, a23,
         0, 0, 1;
@@ -267,6 +302,7 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   for(int i = 0; i < prediction_horizon_; i++){
     Ax_blk.segment(i * ny_, nx_) = A_blk_.block(i * ny_, 0, ny_, nx_) * x_k_;
   }
+  RCLCPP_INFO_STREAM(logger_, "Ax_blk: \n" << Ax_blk);
 
   for(int i = 0; i < prediction_horizon_; i++){
     Q_blk_.block(i * nx_, i * nx_, nx_, nx_) = Q_;
@@ -305,20 +341,24 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   Eigen::VectorXd u(prediction_horizon_ * nu_);
   qp_solver.solve(H, f, D, lb, ub , u);
 
-  // RCLCPP_INFO_STREAM(logger_, "\nControl u:\n" << u[0] << "\n" << u[1]);
+  RCLCPP_INFO_STREAM(logger_, "Control u: [" << u[0] << ", " << u[1] << "]");
 
   linear_vel = u[0];
   angular_vel = u[1];
 
-  linear_vel = 0.0;
-  angular_vel = 0.0;
+  Eigen::VectorXd X_pred(prediction_horizon_ * nx_);
+  X_pred << Ax_blk + B_blk_ * u;
+
+  // RCLCPP_INFO_STREAM(logger_, "Optimized state:\n" << X_pred);
+  RCLCPP_INFO_STREAM(logger_, "State error:\n" << X_ref_ - X_pred);
   
   geometry_msgs::msg::TwistStamped cmd_vel;
   cmd_vel.header.frame_id = robot_pose.header.frame_id;
   cmd_vel.header.stamp = clock_->now();
-  cmd_vel.twist.linear.x = linear_vel;
-  cmd_vel.twist.angular.z = angular_vel;
-
+  cmd_vel.twist.linear.x = 0.0;
+  cmd_vel.twist.angular.z = 0.0;
+  // cmd_vel.twist.linear.x = linear_vel;
+  // cmd_vel.twist.angular.z = angular_vel;
   return cmd_vel;
 }
 

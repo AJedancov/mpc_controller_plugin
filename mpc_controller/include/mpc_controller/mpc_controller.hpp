@@ -84,7 +84,7 @@ protected:
   Eigen::MatrixXd Q_blk_;
   Eigen::MatrixXd R_blk_;
 
-  double dt = 0.1; // sampling time
+  double dt = 0.05; // sampling time
   double linear_vel = 0.5;
   double angular_vel = 1;
   
