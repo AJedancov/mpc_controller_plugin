@@ -159,9 +159,14 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   // RCLCPP_INFO_STREAM(logger_, "s_path_cum: " << ss1.str());
   
   // double s_predict = std::abs(linear_vel * dt); // predicted arc lengths
-  double s_predict = 0.025;
+  double s_predict = params_.max_lin_vel * dt;
+  double s_predict_total = s_predict * prediction_horizon_;
+  double s_path_total = s_path_cum.back();
 
-  
+  if(s_predict_total > s_path_total){
+    s_predict = s_path_total / prediction_horizon_;
+  }
+
   // Replace on tsd::begin(), std::end and std::partial_sum()
   std::vector<double> s_predict_cum;
   s_predict_cum.push_back(0.0);
@@ -355,6 +360,8 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   cmd_vel.header.stamp = clock_->now();
   cmd_vel.twist.linear.x = linear_vel;
   cmd_vel.twist.angular.z = angular_vel;
+  // cmd_vel.twist.linear.x = 0.0;
+  // cmd_vel.twist.angular.z = 0.0;
   return cmd_vel;
 }
 
