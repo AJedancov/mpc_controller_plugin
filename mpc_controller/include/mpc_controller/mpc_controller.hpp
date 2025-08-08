@@ -116,7 +116,7 @@ private:
     return result;
   }
 
-  std::shared_ptr<rclcpp::Publisher<geometry_msgs::msg::PointStamped>> closest_waypoint_publisher_;
+  std::shared_ptr<rclcpp::Publisher<geometry_msgs::msg::PointStamped>> projection_point_publisher_;
   std::shared_ptr<rclcpp::Publisher<nav_msgs::msg::Path>> lerp_ref_path_publisher_;
 
 };

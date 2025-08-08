@@ -37,7 +37,7 @@ void MPCController::configure(
   node->get_parameter(plugin_name_ + ".min_ang_vel", params_.min_ang_vel);
   node->get_parameter(plugin_name_ + ".local_frame", params_.local_frame);
 
-  closest_waypoint_publisher_ = node->create_publisher<geometry_msgs::msg::PointStamped>("closest_point", 10);
+  projection_point_publisher_ = node->create_publisher<geometry_msgs::msg::PointStamped>("closest_point", 10);
   lerp_ref_path_publisher_ = node->create_publisher<nav_msgs::msg::Path>("reference_path", 10);
 
   prediction_horizon_ = 5;
@@ -100,18 +100,18 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
 
 
   int waypoints_num = global_path_.poses.size();
-  RCLCPP_INFO_STREAM(logger_, "waypoints_num: " << waypoints_num);
+  // RCLCPP_INFO_STREAM(logger_, "waypoints_num: " << waypoints_num);
 
 
-  geometry_msgs::msg::PointStamped closest_wp;
-  closest_wp.header.frame_id = global_path_.header.frame_id;
-  closest_wp.header.stamp = clock_->now();
-  closest_wp.point.x = global_path_.poses[0].pose.position.x;
-  closest_wp.point.y = global_path_.poses[0].pose.position.y;
-  closest_wp.point.z = 0;
+  geometry_msgs::msg::PointStamped projection_point;
+  projection_point.header.frame_id = global_path_.header.frame_id;
+  projection_point.header.stamp = clock_->now();
+  projection_point.point.x = global_path_.poses[0].pose.position.x;
+  projection_point.point.y = global_path_.poses[0].pose.position.y;
+  projection_point.point.z = 0;
 
-  double closest_wp_idx = 0;
-  double closest_wp_dist = std::numeric_limits<double>::max();
+  double ref_wp_idx = 0;
+  double ref_wp_dist = std::numeric_limits<double>::max();
   for(int i = 0; i < waypoints_num - 2; i++){
 
     double x_rob = robot_pose.pose.position.x;
@@ -128,27 +128,28 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
     std::vector<double> v_wps = {x_gp_i1 - x_gp_i0, y_gp_i1 - y_gp_i0}; // vector from closest waypoint to next waypoint along path
     
     double ip_rob = std::inner_product(v_rob.begin(), v_rob.end(), v_wps.begin(), 0.0);
-    if (hypot < closest_wp_dist && ip_rob >= 0){
-      closest_wp_dist = hypot;
-      closest_wp_idx = i;
-
-      // linear interpolation between two waypoints
-      double ip_wp = std::inner_product(v_wps.begin(), v_wps.end(), v_wps.begin(), 0.0);
-      double t = ip_rob / ip_wp;
-
-      closest_wp.point.x = x_gp_i0 + t * (x_gp_i1 - x_gp_i0);
-      closest_wp.point.y = y_gp_i0 + t * (y_gp_i1 - y_gp_i0);
-
-      global_path_.poses[closest_wp_idx].pose.position.x = closest_wp.point.x;
-      global_path_.poses[closest_wp_idx].pose.position.y = closest_wp.point.y;
+    if (hypot < ref_wp_dist){
+      ref_wp_dist = hypot;
+      ref_wp_idx = i;
+      if(ip_rob >= 0){
+        // linear interpolation between two waypoints
+        double ip_wp = std::inner_product(v_wps.begin(), v_wps.end(), v_wps.begin(), 0.0);
+        
+        double t = ip_rob / ip_wp;
+        projection_point.point.x = x_gp_i0 + t * (x_gp_i1 - x_gp_i0);
+        projection_point.point.y = y_gp_i0 + t * (y_gp_i1 - y_gp_i0);
+      }else if(i == 0){
+        projection_point.point.x = global_path_.poses[0].pose.position.x;
+        projection_point.point.y = global_path_.poses[0].pose.position.y;
+      }
     }
   }
 
-  closest_waypoint_publisher_->publish(closest_wp);
+  projection_point_publisher_->publish(projection_point);
 
   std::vector<double> s_path_cum;
   s_path_cum.push_back(0.0);
-  for(int i = closest_wp_idx; i < waypoints_num - closest_wp_idx - 1; i++){
+  for(int i = ref_wp_idx; i < waypoints_num - 1; i++){
     double dx = global_path_.poses[i + 1].pose.position.x - global_path_.poses[i].pose.position.x;
     double dy = global_path_.poses[i + 1].pose.position.y - global_path_.poses[i].pose.position.y;
     s_path_cum.push_back(s_path_cum.back() + std::hypot(dx, dy));
@@ -197,13 +198,13 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
 
     double ratio = (s_predict_cum[s_predict_idx] - s_path_cum[s_path_idx - 1]) / (s_path_cum[s_path_idx] - s_path_cum[s_path_idx - 1]);
     
-    double x_k0 = global_path_.poses[closest_wp_idx + s_path_idx - 1].pose.position.x;
-    double x_k1 = global_path_.poses[closest_wp_idx + s_path_idx].pose.position.x;
+    double x_k0 = global_path_.poses[ref_wp_idx + s_path_idx - 1].pose.position.x;
+    double x_k1 = global_path_.poses[ref_wp_idx + s_path_idx].pose.position.x;
     double x_ref = x_k0 + ratio * (x_k1 - x_k0);
     x_refs.push_back(x_ref);
     
-    double y_k0 = global_path_.poses[closest_wp_idx + s_path_idx - 1].pose.position.y;
-    double y_k1 = global_path_.poses[closest_wp_idx + s_path_idx].pose.position.y;
+    double y_k0 = global_path_.poses[ref_wp_idx + s_path_idx - 1].pose.position.y;
+    double y_k1 = global_path_.poses[ref_wp_idx + s_path_idx].pose.position.y;
     double y_ref = y_k0 + ratio * (y_k1 - y_k0);
     y_refs.push_back(y_ref);
 
@@ -232,7 +233,7 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
     lerp_ref_path.poses[i].pose.orientation = tf2::toMsg(q);
   }
 
-  RCLCPP_INFO_STREAM(logger_, "X_ref_: \n" << X_ref_);
+  // RCLCPP_INFO_STREAM(logger_, "X_ref_: \n" << X_ref_);
   lerp_ref_path_publisher_->publish(lerp_ref_path);
   
   // TODO: express coordinates in a moving coordinate system instead of global
@@ -350,7 +351,7 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   X_pred << Ax_blk + B_blk_ * u;
 
   // RCLCPP_INFO_STREAM(logger_, "Optimized state:\n" << X_pred);
-  RCLCPP_INFO_STREAM(logger_, "State error:\n" << X_ref_ - X_pred);
+  // RCLCPP_INFO_STREAM(logger_, "State error:\n" << X_ref_ - X_pred);
   
   geometry_msgs::msg::TwistStamped cmd_vel;
   cmd_vel.header.frame_id = robot_pose.header.frame_id;
