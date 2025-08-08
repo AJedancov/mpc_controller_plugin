@@ -12,14 +12,15 @@ void MPCController::configure(
   const std::shared_ptr<tf2_ros::Buffer> tf_buffer,
   const std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros)
 {
+  (void) costmap_ros;
+
   auto node = parent.lock();
   node_ = parent;
   tf_buffer_ = tf_buffer;
   plugin_name_ = name;
-  (void) costmap_ros;
-  
-  // logger_ = node->get_logger();
   clock_ = node->get_clock();
+
+  path_manager_.configure(parent);
 
   params_callback_handle_ = node->add_on_set_parameters_callback(
     std::bind(&MPCController::paramsCallback, this, std::placeholders::_1)
@@ -36,9 +37,6 @@ void MPCController::configure(
   node->get_parameter(plugin_name_ + ".max_ang_vel", params_.max_ang_vel);
   node->get_parameter(plugin_name_ + ".min_ang_vel", params_.min_ang_vel);
   node->get_parameter(plugin_name_ + ".local_frame", params_.local_frame);
-
-  projection_point_publisher_ = node->create_publisher<geometry_msgs::msg::PointStamped>("closest_point", 10);
-  lerp_ref_path_publisher_ = node->create_publisher<nav_msgs::msg::Path>("reference_path", 10);
 
   prediction_horizon_ = 5;
 
@@ -80,7 +78,7 @@ void MPCController::setSpeedLimit(const double &speed_limit, const bool &percent
 }
 
 void MPCController::setPlan(const nav_msgs::msg::Path& path){
-  global_path_ = path;
+  path_manager_.setGlobalPath(path);
 }
 
 geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
@@ -91,152 +89,8 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   (void) robot_velocity;
   (void) goal_checker;
 
-  // nav_msgs::msg::Path pruned_path = prunePath(global_path_);
-
-  // int global_path_section_num = global_path_.poses.size() - 1;
-  // Eigen::VectorXd global_path_section_len(global_path_section_num);
-
-  // int closest_waypoint_idx = findClosestWaypointIndex();
-
-
-  int waypoints_num = global_path_.poses.size();
-  // RCLCPP_INFO_STREAM(logger_, "waypoints_num: " << waypoints_num);
-
-
-  geometry_msgs::msg::PointStamped projection_point;
-  projection_point.header.frame_id = global_path_.header.frame_id;
-  projection_point.header.stamp = clock_->now();
-  projection_point.point.x = global_path_.poses[0].pose.position.x;
-  projection_point.point.y = global_path_.poses[0].pose.position.y;
-  projection_point.point.z = 0;
-
-  double ref_wp_idx = 0;
-  double ref_wp_dist = std::numeric_limits<double>::max();
-  for(int i = 0; i < waypoints_num - 2; i++){
-
-    double x_rob = robot_pose.pose.position.x;
-    double y_rob = robot_pose.pose.position.y;
-
-    double x_gp_i0 = global_path_.poses[i].pose.position.x;
-    double y_gp_i0 = global_path_.poses[i].pose.position.y;
-
-    double x_gp_i1 = global_path_.poses[i + 1].pose.position.x;
-    double y_gp_i1 = global_path_.poses[i + 1].pose.position.y;
-
-    double hypot = std::hypot(x_rob - x_gp_i0, y_rob - y_gp_i0);
-    std::vector<double> v_rob = {x_rob - x_gp_i0, y_rob - y_gp_i0}; // vector from closest waypoint to robot
-    std::vector<double> v_wps = {x_gp_i1 - x_gp_i0, y_gp_i1 - y_gp_i0}; // vector from closest waypoint to next waypoint along path
-    
-    double ip_rob = std::inner_product(v_rob.begin(), v_rob.end(), v_wps.begin(), 0.0);
-    if (hypot < ref_wp_dist){
-      ref_wp_dist = hypot;
-      ref_wp_idx = i;
-      if(ip_rob >= 0){
-        // linear interpolation between two waypoints
-        double ip_wp = std::inner_product(v_wps.begin(), v_wps.end(), v_wps.begin(), 0.0);
-        
-        double t = ip_rob / ip_wp;
-        projection_point.point.x = x_gp_i0 + t * (x_gp_i1 - x_gp_i0);
-        projection_point.point.y = y_gp_i0 + t * (y_gp_i1 - y_gp_i0);
-      }else if(i == 0){
-        projection_point.point.x = global_path_.poses[0].pose.position.x;
-        projection_point.point.y = global_path_.poses[0].pose.position.y;
-      }
-    }
-  }
-
-  projection_point_publisher_->publish(projection_point);
-
-  std::vector<double> s_path_cum;
-  s_path_cum.push_back(0.0);
-  for(int i = ref_wp_idx; i < waypoints_num - 1; i++){
-    double dx = global_path_.poses[i + 1].pose.position.x - global_path_.poses[i].pose.position.x;
-    double dy = global_path_.poses[i + 1].pose.position.y - global_path_.poses[i].pose.position.y;
-    s_path_cum.push_back(s_path_cum.back() + std::hypot(dx, dy));
-  }
-
-  // std::stringstream ss1;
-  // std::copy(s_path_cum.begin(), s_path_cum.end(), std::ostream_iterator<double>(ss1, " "));
-  // RCLCPP_INFO_STREAM(logger_, "s_path_cum: " << ss1.str());
-  
-  // double s_predict = std::abs(linear_vel * dt); // predicted arc lengths
-  double s_predict = params_.max_lin_vel * dt;
-  double s_predict_total = s_predict * prediction_horizon_;
-  double s_path_total = s_path_cum.back();
-
-  if(s_predict_total > s_path_total){
-    s_predict = s_path_total / prediction_horizon_;
-  }
-
-  // Replace on tsd::begin(), std::end and std::partial_sum()
-  std::vector<double> s_predict_cum;
-  s_predict_cum.push_back(0.0);
-  for(int i = 0; i < prediction_horizon_; i++){
-    s_predict_cum.push_back(s_predict_cum.back() + s_predict);
-  }
-
-  // std::stringstream ss;
-  // std::copy(s_predict_cum.begin(), s_predict_cum.end(), std::ostream_iterator<double>(ss, " "));
-  // RCLCPP_INFO_STREAM(logger_, "s_predict_cum: " << ss.str());
- 
-  nav_msgs::msg::Path lerp_ref_path;
-  lerp_ref_path.header.frame_id = global_path_.header.frame_id;
-  lerp_ref_path.header.stamp = clock_->now();
-  lerp_ref_path.poses.resize(prediction_horizon_);
-
-  X_ref_.setZero();
-  std::vector<double> x_refs;
-  std::vector<double> y_refs;
-  int s_path_idx = 1;
-  int s_predict_idx = 1;
-
-  while(s_predict_idx < prediction_horizon_ + 1){
-
-    while(s_path_cum[s_path_idx] < s_predict_cum[s_predict_idx] && s_path_idx < waypoints_num - 1){
-      s_path_idx++;
-    }
-
-    double ratio = (s_predict_cum[s_predict_idx] - s_path_cum[s_path_idx - 1]) / (s_path_cum[s_path_idx] - s_path_cum[s_path_idx - 1]);
-    
-    double x_k0 = global_path_.poses[ref_wp_idx + s_path_idx - 1].pose.position.x;
-    double x_k1 = global_path_.poses[ref_wp_idx + s_path_idx].pose.position.x;
-    double x_ref = x_k0 + ratio * (x_k1 - x_k0);
-    x_refs.push_back(x_ref);
-    
-    double y_k0 = global_path_.poses[ref_wp_idx + s_path_idx - 1].pose.position.y;
-    double y_k1 = global_path_.poses[ref_wp_idx + s_path_idx].pose.position.y;
-    double y_ref = y_k0 + ratio * (y_k1 - y_k0);
-    y_refs.push_back(y_ref);
-
-    s_predict_idx++;
-  }
-
-  for(int i = 0; i < prediction_horizon_; i++){
-    
-    double dx_ref = 0.0;
-    double dy_ref = 0.0;
-    if(i == prediction_horizon_ - 1){
-      dx_ref = x_refs[i] - x_refs[i - 1];
-      dy_ref = y_refs[i] - y_refs[i - 1];
-    }else{
-      dx_ref = x_refs[i + 1] - x_refs[i];
-      dy_ref = y_refs[i + 1] - y_refs[i];
-    }
-    double theta_ref = std::atan2(dy_ref, dx_ref);
-    
-    X_ref_.segment(i * nx_, nx_) << x_refs[i], y_refs[i], theta_ref;
-    
-    lerp_ref_path.poses[i].pose.position.x = x_refs[i];
-    lerp_ref_path.poses[i].pose.position.y = y_refs[i];
-    tf2::Quaternion q;
-    q.setRPY(0, 0, theta_ref);
-    lerp_ref_path.poses[i].pose.orientation = tf2::toMsg(q);
-  }
-
-  // RCLCPP_INFO_STREAM(logger_, "X_ref_: \n" << X_ref_);
-  lerp_ref_path_publisher_->publish(lerp_ref_path);
-  
-  // TODO: express coordinates in a moving coordinate system instead of global
+  // TODO: create holder for all parameters
+  X_ref_ = path_manager_.computeReferencePath(robot_pose, prediction_horizon_, nx_, params_.max_lin_vel, dt);
 
   double yaw = tf2::getYaw(robot_pose.pose.orientation);
   x_k_ << robot_pose.pose.position.x,

@@ -1,11 +1,11 @@
 #include "rclcpp/rclcpp.hpp"
+#include "rcl_interfaces/msg/set_parameters_result.hpp"
 #include "nav2_core/controller.hpp"
+
 #include "pluginlib/class_loader.hpp"
 #include "pluginlib/class_list_macros.hpp"
-#include "rcl_interfaces/msg/set_parameters_result.hpp"
-#include "geometry_msgs/msg/point_stamped.hpp"
-#include "nav_msgs/msg/path.h"
 
+#include "mpc_controller/path_manager.hpp"
 #include "mpc_controller/osqp_solver_interface.hpp"
 #include <Eigen/Core>
 
@@ -49,7 +49,7 @@ public:
   ) override;
 
 
-protected:
+private:
   rclcpp_lifecycle::LifecycleNode::WeakPtr node_;
   rclcpp::Clock::SharedPtr clock_;
   rclcpp::Logger logger_ = rclcpp::get_logger("MPCController");
@@ -58,7 +58,7 @@ protected:
   std::string plugin_name_;
   std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
 
-  nav_msgs::msg::Path global_path_;
+  PathManager path_manager_;
 
   int prediction_horizon_;
   int control_horizon_;
@@ -91,7 +91,6 @@ protected:
   // Node parameters
   Parameters params_;
 
-private:
 
   rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr params_callback_handle_;
   rcl_interfaces::msg::SetParametersResult paramsCallback(const std::vector<rclcpp::Parameter> &params){
@@ -115,9 +114,6 @@ private:
     result.successful = true;
     return result;
   }
-
-  std::shared_ptr<rclcpp::Publisher<geometry_msgs::msg::PointStamped>> projection_point_publisher_;
-  std::shared_ptr<rclcpp::Publisher<nav_msgs::msg::Path>> lerp_ref_path_publisher_;
 
 };
 

@@ -41,6 +41,7 @@ include_directories(${PROJECT_SOURCE_DIR}/include)
 
 add_library(mpc_controller SHARED 
   ${PROJECT_SOURCE_DIR}/src/mpc_controller.cpp
+  ${PROJECT_SOURCE_DIR}/src/path_manager.cpp
   ${PROJECT_SOURCE_DIR}/src/osqp_solver_interface.cpp
 )
 
