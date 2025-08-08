@@ -320,11 +320,8 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   Eigen::VectorXd f(prediction_horizon_ * nu_);
   f = 2 * B_blk_.transpose() * Q_blk_ * (Ax_blk - X_ref_); 
   
-  Eigen::MatrixXd D(prediction_horizon_ * nu_, nu_);
-
-  for(int i = 0; i < prediction_horizon_; i++){
-    D.block(i * nu_, 0, nu_, nu_) = Eigen::MatrixXd::Identity(nu_, nu_);
-  }
+  Eigen::MatrixXd D(prediction_horizon_ * nu_, prediction_horizon_ * nu_);
+  D << Eigen::MatrixXd::Identity(prediction_horizon_ * nu_, prediction_horizon_ * nu_);
 
   Eigen::VectorXd lb (prediction_horizon_ * nu_);
   Eigen::VectorXd ub (prediction_horizon_ * nu_);

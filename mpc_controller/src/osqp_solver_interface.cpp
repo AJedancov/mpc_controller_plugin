@@ -35,7 +35,7 @@ void osqp::OSQPSolverInterface::solve(
     &osqp_solver_,
     H_osqp_csc.matrix_ptr_.get(), 
     f_osqp, 
-    H_osqp_csc.matrix_ptr_.get(), 
+    D_osqp_csc.matrix_ptr_.get(), 
     lb_osqp, 
     ub_osqp, 
     m, 
