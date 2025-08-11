@@ -5,65 +5,44 @@
 namespace mpc_controller
 {
 
-
 void MPCController::configure(
-  const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent,
+  const rclcpp_lifecycle::LifecycleNode::WeakPtr& parent,
   std::string name, 
   const std::shared_ptr<tf2_ros::Buffer> tf_buffer,
   const std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros)
 {
   (void) costmap_ros;
 
-  auto node = parent.lock();
-  node_ = parent;
+  node_ = parent.lock();
+  clock_ = node_->get_clock();
   tf_buffer_ = tf_buffer;
   plugin_name_ = name;
-  clock_ = node->get_clock();
+  
+  parameters_manager_.configure(parent, name);
+  params_ = parameters_manager_.get_parameters();
 
-  path_manager_.configure(parent);
+  path_manager_.configure(parent, params_);
 
-  params_callback_handle_ = node->add_on_set_parameters_callback(
-    std::bind(&MPCController::paramsCallback, this, std::placeholders::_1)
-  );
-
-  node->declare_parameter(plugin_name_ + ".max_lin_vel", rclcpp::ParameterValue(0.5));
-  node->declare_parameter(plugin_name_ + ".min_lin_vel", rclcpp::ParameterValue(0.5));
-  node->declare_parameter(plugin_name_ + ".max_ang_vel", rclcpp::ParameterValue(-0.5));
-  node->declare_parameter(plugin_name_ + ".min_ang_vel", rclcpp::ParameterValue(-0.5));
-  node->declare_parameter(plugin_name_ + ".local_frame", rclcpp::ParameterValue(std::string("odom")));
-
-  node->get_parameter(plugin_name_ + ".max_lin_vel", params_.max_lin_vel);
-  node->get_parameter(plugin_name_ + ".min_lin_vel", params_.min_lin_vel);
-  node->get_parameter(plugin_name_ + ".max_ang_vel", params_.max_ang_vel);
-  node->get_parameter(plugin_name_ + ".min_ang_vel", params_.min_ang_vel);
-  node->get_parameter(plugin_name_ + ".local_frame", params_.local_frame);
-
-  prediction_horizon_ = 5;
-
-  nx_ = 3; //state dimension
-  nu_ = 2; //control input dimension
-  ny_ = 3; //output dimension
-
-  x_k_.resize(nx_);
-  X_ref_.resize(prediction_horizon_ * nx_);
+  x_k_.resize(params_->nx);
+  X_ref_.resize(params_->prediction_horizon * params_->nx);
 
   // Set matrix dimensions
-  A_.resize(nx_, nx_);
-  B_.resize(nx_, nu_);
-  C_.resize(ny_, nx_);
-  C_ << Eigen::MatrixXd::Identity(ny_, nx_);
+  A_.resize(params_->nx, params_->nx);
+  B_.resize(params_->nx, params_->nu);
+  C_.resize(params_->ny, params_->nx);
+  C_ << Eigen::MatrixXd::Identity(params_->ny, params_->nx);
 
-  A_blk_.resize(prediction_horizon_ * ny_, nx_);
-  B_blk_.resize(prediction_horizon_ * ny_, prediction_horizon_ * nu_);
+  A_blk_.resize(params_->prediction_horizon * params_->ny, params_->nx);
+  B_blk_.resize(params_->prediction_horizon * params_->ny, params_->prediction_horizon * params_->nu);
 
-  Q_.resize(ny_, ny_);
-  Q_ << Eigen::MatrixXd::Identity(ny_, ny_) * 10;
+  Q_.resize(params_->ny, params_->ny);
+  Q_ << Eigen::MatrixXd::Identity(params_->ny, params_->ny) * 10;
 
-  R_.resize(nu_, nu_);
-  R_ << Eigen::MatrixXd::Identity(nu_, nu_) * 0.1;
+  R_.resize(params_->nu, params_->nu);
+  R_ << Eigen::MatrixXd::Identity(params_->nu, params_->nu) * 0.1;
 
-  Q_blk_.resize(prediction_horizon_ * Q_.rows(), prediction_horizon_ * Q_.cols());
-  R_blk_.resize(prediction_horizon_ * R_.rows(), prediction_horizon_ * R_.cols());
+  Q_blk_.resize(params_->prediction_horizon * Q_.rows(), params_->prediction_horizon * Q_.cols());
+  R_blk_.resize(params_->prediction_horizon * R_.rows(), params_->prediction_horizon * R_.cols());
 }
 
 void MPCController::cleanup(){}
@@ -89,8 +68,7 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   (void) robot_velocity;
   (void) goal_checker;
 
-  // TODO: create holder for all parameters
-  X_ref_ = path_manager_.computeReferencePath(robot_pose, prediction_horizon_, nx_, params_.max_lin_vel, dt);
+  X_ref_ = path_manager_.computeReferencePath(robot_pose);
 
   double yaw = tf2::getYaw(robot_pose.pose.orientation);
   x_k_ << robot_pose.pose.position.x,
@@ -98,19 +76,19 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
           yaw;
 
   // Define system dynamic
-  double a13 = -params_.max_lin_vel * std::sin(yaw) * dt;
-  double a23 = params_.max_lin_vel * std::cos(yaw) * dt;
+  double a13 = -params_->max_lin_vel * std::sin(yaw) * params_->dt;
+  double a23 = params_->max_lin_vel * std::cos(yaw) * params_->dt;
 
   A_ << 1, 0, a13,
         0, 1, a23,
         0, 0, 1;
 
-  double b11 = std::cos(yaw) * dt;
-  double b21 = std::sin(yaw) * dt;
+  double b11 = std::cos(yaw) * params_->dt;
+  double b21 = std::sin(yaw) * params_->dt;
 
   B_ << b11, 0,
         b21, 0,
-        0 , dt;
+        0, params_->dt;
 
   // =======================
   // === System stacking ===
@@ -122,28 +100,24 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
 
   A_blk_.setZero();
 
-  for(int i = 0; i < prediction_horizon_; i++){
+  for(int i = 0; i < params_->prediction_horizon; i++){
     if(i) A_pow *= A_;
-    A_blk_.block(i * ny_, 0, ny_, nx_) = C_ * A_pow;
+    A_blk_.block(i * params_->ny, 0, params_->ny, params_->nx) = C_ * A_pow;
   }
-
-  // RCLCPP_INFO_STREAM_ONCE(logger_, "Block Matrix A: \n" << A_blk_);
 
   // Stacking B matrix
   A_pow.setZero();
   B_blk_.setZero();
 
-  for(int i = 0; i < prediction_horizon_; i++){
+  for(int i = 0; i < params_->prediction_horizon; i++){
     
-    A_pow << Eigen::MatrixXd::Identity(ny_, nx_);
-    for(int j = 0; j < prediction_horizon_ - i; j++){
+    A_pow << Eigen::MatrixXd::Identity(params_->ny, params_->nx);
+    for(int j = 0; j < params_->prediction_horizon - i; j++){
       
       if(j) A_pow *= A_;
-      B_blk_.block((j + i) * nx_, i * nu_, nx_, nu_) = C_ * A_pow * B_;
+      B_blk_.block((j + i) * params_->nx, i * params_->nu, params_->nx, params_->nu) = C_ * A_pow * B_;
     }
   }
-
-  // RCLCPP_INFO_STREAM_ONCE(logger_, "Block Matrix B: \n" << B_blk_);
 
   // ==================
   // === QP problem ===
@@ -154,54 +128,48 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   // Subject to:
   // Du <= b
 
-  Eigen::VectorXd Ax_blk(prediction_horizon_ * ny_);
+  Eigen::VectorXd Ax_blk(params_->prediction_horizon * params_->ny);
   Ax_blk.setZero();
 
-  for(int i = 0; i < prediction_horizon_; i++){
-    Ax_blk.segment(i * ny_, nx_) = A_blk_.block(i * ny_, 0, ny_, nx_) * x_k_;
+  for(int i = 0; i < params_->prediction_horizon; i++){
+    Ax_blk.segment(i * params_->ny, params_->nx) = A_blk_.block(i * params_->ny, 0, params_->ny, params_->nx) * x_k_;
   }
-  // RCLCPP_INFO_STREAM(logger_, "Ax_blk: \n" << Ax_blk);
 
-  for(int i = 0; i < prediction_horizon_; i++){
-    Q_blk_.block(i * nx_, i * nx_, nx_, nx_) = Q_;
-    R_blk_.block(i * nu_, i * nu_, nu_, nu_) = R_;
+  for(int i = 0; i < params_->prediction_horizon; i++){
+    Q_blk_.block(i * params_->nx, i * params_->nx, params_->nx, params_->nx) = Q_;
+    R_blk_.block(i * params_->nu, i * params_->nu, params_->nu, params_->nu) = R_;
   }
 
   // Hessian matrixs
-  Eigen::MatrixXd H(prediction_horizon_ * nu_, prediction_horizon_ * nu_); 
+  Eigen::MatrixXd H(params_->prediction_horizon * params_->nu, params_->prediction_horizon * params_->nu); 
   H = 2 * (B_blk_.transpose() * Q_blk_ * B_blk_ + R_blk_);  
 
   // Linear term
-  Eigen::VectorXd f(prediction_horizon_ * nu_);
+  Eigen::VectorXd f(params_->prediction_horizon * params_->nu);
   f = 2 * B_blk_.transpose() * Q_blk_ * (Ax_blk - X_ref_); 
   
-  Eigen::MatrixXd D(prediction_horizon_ * nu_, prediction_horizon_ * nu_);
-  D << Eigen::MatrixXd::Identity(prediction_horizon_ * nu_, prediction_horizon_ * nu_);
+  Eigen::MatrixXd D(params_->prediction_horizon * params_->nu, params_->prediction_horizon * params_->nu);
+  D << Eigen::MatrixXd::Identity(params_->prediction_horizon * params_->nu, params_->prediction_horizon * params_->nu);
 
-  Eigen::VectorXd lb (prediction_horizon_ * nu_);
-  Eigen::VectorXd ub (prediction_horizon_ * nu_);
+  Eigen::VectorXd lb (params_->prediction_horizon * params_->nu);
+  Eigen::VectorXd ub (params_->prediction_horizon * params_->nu);
   
-  for(int i = 0; i < prediction_horizon_; i++){
-    lb.segment(i * nu_, nu_) << params_.min_lin_vel, params_.min_ang_vel;
-    ub.segment(i * nu_, nu_) << params_.max_lin_vel, params_.max_ang_vel;
+  for(int i = 0; i < params_->prediction_horizon; i++){
+    lb.segment(i * params_->nu, params_->nu) << params_->min_lin_vel, params_->min_ang_vel;
+    ub.segment(i * params_->nu, params_->nu) << params_->max_lin_vel, params_->max_ang_vel;
   }
-
-  // RCLCPP_INFO_STREAM_ONCE(logger_, "Block Matrix H: \n" << H);
-  // RCLCPP_INFO_STREAM_ONCE(logger_, "Linear term f: \n" << f);
 
   // === Solve QP problem ===
   
   osqp::OSQPSolverInterface qp_solver(logger_);
 
-  Eigen::VectorXd u(prediction_horizon_ * nu_);
+  Eigen::VectorXd u(params_->prediction_horizon * params_->nu);
   qp_solver.solve(H, f, D, lb, ub , u);
 
-  RCLCPP_INFO_STREAM(logger_, "Control u: [" << u[0] << ", " << u[1] << "]");
-
-  linear_vel = u[0];
-  angular_vel = u[1];
-
-  Eigen::VectorXd X_pred(prediction_horizon_ * nx_);
+  double linear_vel = u[0];
+  double angular_vel = u[1];
+  
+  Eigen::VectorXd X_pred(params_->prediction_horizon * params_->nx);
   X_pred << Ax_blk + B_blk_ * u;
 
   // RCLCPP_INFO_STREAM(logger_, "Optimized state:\n" << X_pred);
@@ -212,8 +180,6 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   cmd_vel.header.stamp = clock_->now();
   cmd_vel.twist.linear.x = linear_vel;
   cmd_vel.twist.angular.z = angular_vel;
-  // cmd_vel.twist.linear.x = 0.0;
-  // cmd_vel.twist.angular.z = 0.0;
   return cmd_vel;
 }
 

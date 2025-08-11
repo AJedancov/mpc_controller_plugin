@@ -2,14 +2,18 @@
 
 PathManager::PathManager(){}
 
-void PathManager::configure(const rclcpp_lifecycle::LifecycleNode::WeakPtr& parent){
-  auto node = parent.lock();
-  clock_ = node->get_clock();
- 
-  projection_point_publisher_ = node->create_publisher<geometry_msgs::msg::PointStamped>(
+void PathManager::configure(
+  rclcpp_lifecycle::LifecycleNode::WeakPtr parent,
+  Parameters* params)
+{
+  node_ = parent.lock();
+  clock_ = node_->get_clock();
+  params_ = params;
+
+  projection_point_publisher_ = node_->create_publisher<geometry_msgs::msg::PointStamped>(
     "closest_point",
     10);
-  lerp_ref_path_publisher_ = node->create_publisher<nav_msgs::msg::Path>(
+  lerp_ref_path_publisher_ = node_->create_publisher<nav_msgs::msg::Path>(
     "reference_path", 
     10);
 }
@@ -19,11 +23,7 @@ void PathManager::setGlobalPath(const nav_msgs::msg::Path &global_path){
 }
 
 Eigen::VectorXd PathManager::computeReferencePath(
-  const geometry_msgs::msg::PoseStamped& robot_pose,
-  int prediction_horizon,
-  int nx,
-  double max_lin_vel,
-  double dt)
+  const geometry_msgs::msg::PoseStamped& robot_pose)
 {
   int waypoints_num = global_path_.poses.size();
 
@@ -79,34 +79,34 @@ Eigen::VectorXd PathManager::computeReferencePath(
     s_path_cum.push_back(s_path_cum.back() + std::hypot(dx, dy));
   }
   
-  double s_predict = max_lin_vel * dt;
-  double s_predict_total = s_predict * prediction_horizon;
+  double s_predict = params_->max_lin_vel * params_->dt;
+  double s_predict_total = s_predict * params_->prediction_horizon;
   double s_path_total = s_path_cum.back();
 
   if(s_predict_total > s_path_total){
-    s_predict = s_path_total / prediction_horizon;
+    s_predict = s_path_total / params_->prediction_horizon;
   }
 
   // TODO: Replace on tsd::begin(), std::end and std::partial_sum()
   std::vector<double> s_predict_cum;
   s_predict_cum.push_back(0.0);
-  for(int i = 0; i < prediction_horizon; i++){
+  for(int i = 0; i < params_->prediction_horizon; i++){
     s_predict_cum.push_back(s_predict_cum.back() + s_predict);
   }
 
   nav_msgs::msg::Path lerp_ref_path;
   lerp_ref_path.header.frame_id = global_path_.header.frame_id;
   lerp_ref_path.header.stamp = clock_->now();
-  lerp_ref_path.poses.resize(prediction_horizon);
+  lerp_ref_path.poses.resize(params_->prediction_horizon);
 
-  reference_path_.resize(prediction_horizon * nx); // TODO: move to configuration section
+  reference_path_.resize(params_->prediction_horizon * params_->nx);
   reference_path_.setZero();
   std::vector<double> x_refs;
   std::vector<double> y_refs;
   int s_path_idx = 1;
   int s_predict_idx = 1;
 
-  while(s_predict_idx < prediction_horizon + 1){
+  while(s_predict_idx < params_->prediction_horizon + 1){
 
     while(s_path_cum[s_path_idx] < s_predict_cum[s_predict_idx] && s_path_idx < waypoints_num - 1){
       s_path_idx++;
@@ -128,11 +128,11 @@ Eigen::VectorXd PathManager::computeReferencePath(
   }
 
   
-  for(int i = 0; i < prediction_horizon; i++){
+  for(int i = 0; i < params_->prediction_horizon; i++){
     
     double dx_ref = 0.0;
     double dy_ref = 0.0;
-    if(i == prediction_horizon - 1){
+    if(i == params_->prediction_horizon - 1){
       dx_ref = x_refs[i] - x_refs[i - 1];
       dy_ref = y_refs[i] - y_refs[i - 1];
     }else{
@@ -141,7 +141,7 @@ Eigen::VectorXd PathManager::computeReferencePath(
     }
     double theta_ref = std::atan2(dy_ref, dx_ref);
     
-    reference_path_.segment(i * nx, nx) << x_refs[i], y_refs[i], theta_ref;
+    reference_path_.segment(i * params_->nx, params_->nx) << x_refs[i], y_refs[i], theta_ref;
     
     lerp_ref_path.poses[i].pose.position.x = x_refs[i];
     lerp_ref_path.poses[i].pose.position.y = y_refs[i];

@@ -1,10 +1,10 @@
 #include "rclcpp/rclcpp.hpp"
-#include "rcl_interfaces/msg/set_parameters_result.hpp"
 #include "nav2_core/controller.hpp"
 
 #include "pluginlib/class_loader.hpp"
 #include "pluginlib/class_list_macros.hpp"
 
+#include "mpc_controller/parameter_manager.hpp"
 #include "mpc_controller/path_manager.hpp"
 #include "mpc_controller/osqp_solver_interface.hpp"
 #include <Eigen/Core>
@@ -15,18 +15,10 @@
 namespace mpc_controller
 {
 
-struct Parameters{
-  double max_lin_vel;
-  double min_lin_vel;
-  double max_ang_vel;
-  double min_ang_vel;
-  std::string local_frame;
-};
-
 class MPCController: public nav2_core::Controller
 {
 public:
-  MPCController() = default;
+  // MPCController() = default;
   ~MPCController() override = default;
 
   void configure(
@@ -50,7 +42,7 @@ public:
 
 
 private:
-  rclcpp_lifecycle::LifecycleNode::WeakPtr node_;
+  rclcpp_lifecycle::LifecycleNode::SharedPtr node_;
   rclcpp::Clock::SharedPtr clock_;
   rclcpp::Logger logger_ = rclcpp::get_logger("MPCController");
 
@@ -59,13 +51,8 @@ private:
   std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
 
   PathManager path_manager_;
-
-  int prediction_horizon_;
-  int control_horizon_;
-
-  int nx_; //state dimension
-  int nu_; //control input dimension
-  int ny_; //output dimension
+  ParameterManager parameters_manager_;
+  Parameters* params_;
 
   Eigen::VectorXd x_k_;
   Eigen::VectorXd X_ref_;
@@ -83,37 +70,6 @@ private:
 
   Eigen::MatrixXd Q_blk_;
   Eigen::MatrixXd R_blk_;
-
-  double dt = 0.05; // sampling time
-  double linear_vel = 0.5;
-  double angular_vel = 1;
-  
-  // Node parameters
-  Parameters params_;
-
-
-  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr params_callback_handle_;
-  rcl_interfaces::msg::SetParametersResult paramsCallback(const std::vector<rclcpp::Parameter> &params){
-  
-    rcl_interfaces::msg::SetParametersResult result;
-
-    for(auto &param : params){
-      if (param.get_name() == plugin_name_ + ".max_lin_vel"){
-        params_.max_lin_vel = param.as_double();
-      }else if (param.get_name() == plugin_name_ + ".min_lin_vel"){
-        params_.min_lin_vel = param.as_double();
-      }else if (param.get_name() == plugin_name_ + ".max_ang_vel"){
-        params_.max_ang_vel = param.as_double();
-      }else if (param.get_name() == plugin_name_ + ".min_ang_vel"){
-        params_.min_ang_vel = param.as_double();
-      }else if (param.get_name() == plugin_name_ + ".local_frame"){
-        params_.local_frame = param.as_string();
-      }
-    }
-
-    result.successful = true;
-    return result;
-  }
 
 };
 
