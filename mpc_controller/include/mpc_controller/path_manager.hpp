@@ -30,12 +30,21 @@ private:
   rclcpp_lifecycle::LifecycleNode::SharedPtr node_;
   nav_msgs::msg::Path global_path_;
   Eigen::VectorXd reference_path_;
-  
   rclcpp::Clock::SharedPtr clock_;
   Parameters* params_;
   
   std::shared_ptr<rclcpp::Publisher<geometry_msgs::msg::PointStamped>> projection_point_publisher_;
   std::shared_ptr<rclcpp::Publisher<nav_msgs::msg::Path>> lerp_ref_path_publisher_;
+
+  int waypoints_num_;
+
+  int findReferenceWaypointIndex(const geometry_msgs::msg::PoseStamped& robot_pose);
+  geometry_msgs::msg::PointStamped findProjectionPoint(const geometry_msgs::msg::PoseStamped& robot_pose, int ref_wp_idx);
+
+  template<typename TypeT>
+  inline TypeT lerp(TypeT first_point, TypeT second_point, TypeT ratio){
+    return first_point + ratio * (second_point - first_point);
+  }
 
 };
 #endif  //PATH_MANAGER_HPP_
