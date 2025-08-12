@@ -25,6 +25,7 @@ public:
   void setGlobalPath(const nav_msgs::msg::Path& global_path);
   
   Eigen::VectorXd computeReferencePath(const geometry_msgs::msg::PoseStamped& robot_pose);
+  void publishOptimalTrajectory(const Eigen::VectorXd& predicted_state);
 
 private:
   rclcpp_lifecycle::LifecycleNode::SharedPtr node_;
@@ -35,6 +36,7 @@ private:
   
   std::shared_ptr<rclcpp::Publisher<geometry_msgs::msg::PointStamped>> projection_point_publisher_;
   std::shared_ptr<rclcpp::Publisher<nav_msgs::msg::Path>> lerp_ref_path_publisher_;
+  std::shared_ptr<rclcpp::Publisher<nav_msgs::msg::Path>> optimal_trajectory_publisher_;
 
   int waypoints_num_;
 

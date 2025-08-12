@@ -16,6 +16,9 @@ void PathManager::configure(
   lerp_ref_path_publisher_ = node_->create_publisher<nav_msgs::msg::Path>(
     "reference_path", 
     10);
+  optimal_trajectory_publisher_ = node_->create_publisher<nav_msgs::msg::Path>(
+    "optimal_trajectory", 
+    10);
 }
 
 
@@ -181,4 +184,24 @@ PathManager::findProjectionPoint(
   projection_point.point.z = 0;
 
   return projection_point;
+}
+
+
+void PathManager::publishOptimalTrajectory(
+  const Eigen::VectorXd& predicted_state)
+{
+  nav_msgs::msg::Path optimal_trajectory;
+  optimal_trajectory.header.frame_id = global_path_.header.frame_id;
+  optimal_trajectory.header.stamp = clock_->now();
+  optimal_trajectory.poses.resize(params_->prediction_horizon);
+  
+  tf2::Quaternion q;
+  for(int i = 0; i < params_->prediction_horizon; i++){
+    optimal_trajectory.poses[i].pose.position.x = predicted_state[i * params_->nx];
+    optimal_trajectory.poses[i].pose.position.y = predicted_state[i * params_->nx + 1];
+    q.setRPY(0, 0, predicted_state[i * params_->nx + 2]);
+    optimal_trajectory.poses[i].pose.orientation = tf2::toMsg(q);
+  }
+
+  optimal_trajectory_publisher_->publish(optimal_trajectory);
 }

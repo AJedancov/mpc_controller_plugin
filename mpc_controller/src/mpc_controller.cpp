@@ -171,6 +171,7 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   
   Eigen::VectorXd X_pred(params_->prediction_horizon * params_->nx);
   X_pred << Ax_blk + B_blk_ * u;
+  path_manager_.publishOptimalTrajectory(X_pred);
 
   // RCLCPP_INFO_STREAM(logger_, "Optimized state:\n" << X_pred);
   // RCLCPP_INFO_STREAM(logger_, "State error:\n" << X_ref_ - X_pred);
