@@ -99,23 +99,19 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   A_pow << A_;
 
   A_blk_.setZero();
-
-  for(int i = 0; i < params_->prediction_horizon; i++){
-    if(i) A_pow *= A_;
-    A_blk_.block(i * params_->ny, 0, params_->ny, params_->nx) = C_ * A_pow;
+  for(int row = 0; row < params_->prediction_horizon; row++){
+    if(row) A_pow *= A_;
+    A_blk_.block(row * params_->ny, 0, params_->ny, params_->nx) = C_ * A_pow;
   }
 
   // Stacking B matrix
   A_pow.setZero();
   B_blk_.setZero();
-
-  for(int i = 0; i < params_->prediction_horizon; i++){
-    
-    A_pow << Eigen::MatrixXd::Identity(params_->ny, params_->nx);
-    for(int j = 0; j < params_->prediction_horizon - i; j++){
-      
-      if(j) A_pow *= A_;
-      B_blk_.block((j + i) * params_->nx, i * params_->nu, params_->nx, params_->nu) = C_ * A_pow * B_;
+  for(int col = 0; col < params_->prediction_horizon; col++){
+    A_pow << Eigen::MatrixXd::Identity(A_pow.rows(), A_pow.cols());
+    for(int row = 0; row < params_->prediction_horizon - col; row++){
+      if(row) A_pow *= A_;
+      B_blk_.block((row + col) * params_->nx, col * params_->nu, params_->nx, params_->nu) = C_ * A_pow * B_;
     }
   }
 
@@ -130,14 +126,13 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
 
   Eigen::VectorXd Ax_blk(params_->prediction_horizon * params_->ny);
   Ax_blk.setZero();
-
-  for(int i = 0; i < params_->prediction_horizon; i++){
-    Ax_blk.segment(i * params_->ny, params_->nx) = A_blk_.block(i * params_->ny, 0, params_->ny, params_->nx) * x_k_;
+  for(int row = 0; row < params_->prediction_horizon; row++){
+    Ax_blk.segment(row * params_->ny, params_->nx) = A_blk_.block(row * params_->ny, 0, params_->ny, params_->nx) * x_k_;
   }
 
-  for(int i = 0; i < params_->prediction_horizon; i++){
-    Q_blk_.block(i * params_->nx, i * params_->nx, params_->nx, params_->nx) = Q_;
-    R_blk_.block(i * params_->nu, i * params_->nu, params_->nu, params_->nu) = R_;
+  for(int row = 0; row < params_->prediction_horizon; row++){
+    Q_blk_.block(row * params_->nx, row * params_->nx, params_->nx, params_->nx) = Q_;
+    R_blk_.block(row * params_->nu, row * params_->nu, params_->nu, params_->nu) = R_;
   }
 
   // Hessian matrixs
@@ -154,9 +149,9 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   Eigen::VectorXd lb (params_->prediction_horizon * params_->nu);
   Eigen::VectorXd ub (params_->prediction_horizon * params_->nu);
   
-  for(int i = 0; i < params_->prediction_horizon; i++){
-    lb.segment(i * params_->nu, params_->nu) << params_->min_lin_vel, params_->min_ang_vel;
-    ub.segment(i * params_->nu, params_->nu) << params_->max_lin_vel, params_->max_ang_vel;
+  for(int row = 0; row < params_->prediction_horizon; row++){
+    lb.segment(row * params_->nu, params_->nu) << params_->min_lin_vel, params_->min_ang_vel;
+    ub.segment(row * params_->nu, params_->nu) << params_->max_lin_vel, params_->max_ang_vel;
   }
 
   // === Solve QP problem ===
