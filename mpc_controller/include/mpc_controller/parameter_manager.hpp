@@ -39,8 +39,8 @@ public:
 
     node_->declare_parameter(plugin_name_ + ".dt", rclcpp::ParameterValue(0.05));
     node_->declare_parameter(plugin_name_ + ".max_lin_vel", rclcpp::ParameterValue(0.5));
-    node_->declare_parameter(plugin_name_ + ".min_lin_vel", rclcpp::ParameterValue(0.5));
-    node_->declare_parameter(plugin_name_ + ".max_ang_vel", rclcpp::ParameterValue(-0.5));
+    node_->declare_parameter(plugin_name_ + ".min_lin_vel", rclcpp::ParameterValue(-0.5));
+    node_->declare_parameter(plugin_name_ + ".max_ang_vel", rclcpp::ParameterValue(1.0));
     node_->declare_parameter(plugin_name_ + ".min_ang_vel", rclcpp::ParameterValue(-0.5));
     node_->declare_parameter(plugin_name_ + ".prediction_horizon", rclcpp::ParameterValue(5));
     node_->declare_parameter(plugin_name_ + ".nx", rclcpp::ParameterValue(3));

@@ -1,0 +1,22 @@
+controller_server:
+  ros__parameters:
+    controller_frequency: 20.0
+
+    goal_checker_plugins: ["goal_checker"]
+    controller_plugins: ["FollowPath"]
+    enable_stamped_cmd_vel: true
+
+    goal_checker:
+      plugin: "nav2_controller::SimpleGoalChecker"
+      stateful: True
+      xy_goal_tolerance: 0.02 # [m]
+      yaw_goal_tolerance: 0.0175 # [rad] ~1 degree
+    
+    FollowPath:
+      plugin: "mpc_controller::MPCController"
+      dt: 0.05
+      prediction_horizon: 5
+      max_lin_vel: 0.5
+      min_lin_vel: -0.5
+      max_ang_vel: 1.0
+      min_ang_vel: -0.5
