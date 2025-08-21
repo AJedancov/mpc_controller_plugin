@@ -5,6 +5,7 @@
 #include "geometry_msgs/msg/point_stamped.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
+#include "tf2/utils.hpp"
 
 #include "mpc_controller/parameter_manager.hpp"
 #include <Eigen/Core>
@@ -34,14 +35,14 @@ private:
   rclcpp::Clock::SharedPtr clock_;
   Parameters* params_;
   
-  std::shared_ptr<rclcpp::Publisher<geometry_msgs::msg::PointStamped>> projection_point_publisher_;
+  std::shared_ptr<rclcpp::Publisher<geometry_msgs::msg::PoseStamped>> projection_point_publisher_;
   std::shared_ptr<rclcpp::Publisher<nav_msgs::msg::Path>> lerp_ref_path_publisher_;
   std::shared_ptr<rclcpp::Publisher<nav_msgs::msg::Path>> optimal_trajectory_publisher_;
 
   int waypoints_num_;
 
   int findReferenceWaypointIndex(const geometry_msgs::msg::PoseStamped& robot_pose);
-  geometry_msgs::msg::PointStamped findProjectionPoint(const geometry_msgs::msg::PoseStamped& robot_pose, int ref_wp_idx);
+  geometry_msgs::msg::PoseStamped findProjectionPoint(const geometry_msgs::msg::PoseStamped& robot_pose, int ref_wp_idx);
 
   template<typename TypeT>
   inline TypeT lerp(TypeT first_point, TypeT second_point, TypeT ratio){
