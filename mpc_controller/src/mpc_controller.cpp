@@ -76,8 +76,9 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
           yaw;
 
   // Define system dynamic
-  double a13 = -params_->max_lin_vel * std::sin(yaw) * params_->dt;
-  double a23 = params_->max_lin_vel * std::cos(yaw) * params_->dt;
+  double linear_vel = robot_velocity.linear.x;
+  double a13 = -linear_vel * std::sin(yaw) * params_->dt;
+  double a23 = linear_vel * std::cos(yaw) * params_->dt;
 
   A_ << 1, 0, a13,
         0, 1, a23,
@@ -161,9 +162,6 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   Eigen::VectorXd u(params_->prediction_horizon * params_->nu);
   qp_solver.solve(H, f, D, lb, ub , u);
 
-  double linear_vel = u[0];
-  double angular_vel = u[1];
-  
   Eigen::VectorXd X_pred(params_->prediction_horizon * params_->nx);
   X_pred << Ax_blk + B_blk_ * u;
   path_manager_.publishOptimalTrajectory(X_pred);
@@ -174,8 +172,8 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   geometry_msgs::msg::TwistStamped cmd_vel;
   cmd_vel.header.frame_id = robot_pose.header.frame_id;
   cmd_vel.header.stamp = clock_->now();
-  cmd_vel.twist.linear.x = linear_vel;
-  cmd_vel.twist.angular.z = angular_vel;
+  cmd_vel.twist.linear.x = u[0];
+  cmd_vel.twist.angular.z = u[1];
   return cmd_vel;
 }
 
