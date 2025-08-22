@@ -143,7 +143,7 @@ int PathManager::findReferenceWaypointIndex(
 {
   int ref_wp_idx = 0;
   double ref_wp_dist = std::numeric_limits<double>::max();
-  for(int i = 0; i < waypoints_num_ - 2; i++){
+  for(int i = 0; i < waypoints_num_ - 1; i++){
 
     double x_rob = robot_pose.pose.position.x;
     double y_rob = robot_pose.pose.position.y;
