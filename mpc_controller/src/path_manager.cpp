@@ -38,68 +38,72 @@ Eigen::VectorXd PathManager::computeReferencePath(
   projection_point = findProjectionPoint(robot_pose, ref_wp_idx);
   projection_point_publisher_->publish(projection_point);
 
-  double s_predict = params_->max_lin_vel * params_->dt;
-  double s_predict_total = s_predict * params_->prediction_horizon;
+  double arc_len_predict = params_->max_lin_vel * params_->dt;
+  double arc_len_predict_total = arc_len_predict * params_->prediction_horizon;
 
-  nav_msgs::msg::Path pruned_path; // prunePath(global_path_, ref_wp_idx)
+  nav_msgs::msg::Path pruned_path; // prunePath(ref_wp_idx, projection_point)
   pruned_path.poses.push_back(projection_point);
-  std::vector<double> s_path_cum;
-  s_path_cum.push_back(0.0);
-  int waypoint_index = ref_wp_idx;
-  while(s_path_cum.back() < s_predict_total && waypoint_index < waypoints_num_ - 1){
+  
+  std::vector<double> arc_len_path_cum;
+  arc_len_path_cum.push_back(0.0);
+  int wp_idx = ref_wp_idx;
+  while(arc_len_path_cum.back() < arc_len_predict_total && wp_idx < waypoints_num_ - 1){
     double dx, dy;
-    if(waypoint_index == ref_wp_idx){
-      dx = global_path_.poses[waypoint_index + 1].pose.position.x - projection_point.pose.position.x;
-      dy = global_path_.poses[waypoint_index + 1].pose.position.y - projection_point.pose.position.y;
+    if(wp_idx == ref_wp_idx){
+      dx = global_path_.poses[wp_idx + 1].pose.position.x - projection_point.pose.position.x;
+      dy = global_path_.poses[wp_idx + 1].pose.position.y - projection_point.pose.position.y;
     }else{
-      dx = global_path_.poses[waypoint_index + 1].pose.position.x - global_path_.poses[waypoint_index].pose.position.x;
-      dy = global_path_.poses[waypoint_index + 1].pose.position.y - global_path_.poses[waypoint_index].pose.position.y;
+      dx = global_path_.poses[wp_idx + 1].pose.position.x - global_path_.poses[wp_idx].pose.position.x;
+      dy = global_path_.poses[wp_idx + 1].pose.position.y - global_path_.poses[wp_idx].pose.position.y;
     }
-    s_path_cum.push_back(s_path_cum.back() + std::hypot(dx, dy));
-    pruned_path.poses.push_back(global_path_.poses[waypoint_index + 1]);
-    waypoint_index++;
+    arc_len_path_cum.push_back(arc_len_path_cum.back() + std::hypot(dx, dy));
+    pruned_path.poses.push_back(global_path_.poses[wp_idx + 1]);
+    wp_idx++;
   }
 
-  double s_path_total = s_path_cum.back();
+  double arc_len_path_total = arc_len_path_cum.back();
   
   bool reached_last_waypoint = false;
-  if(s_predict_total > s_path_total){
-    s_predict = s_path_total / params_->prediction_horizon;
+  if(arc_len_predict_total > arc_len_path_total){
+    arc_len_predict = arc_len_path_total / params_->prediction_horizon;
     reached_last_waypoint = true;
   }
 
   // TODO: Replace on tsd::begin(), std::end and std::partial_sum()
-  std::vector<double> s_predict_cum;
-  s_predict_cum.push_back(0.0);
+  std::vector<double> arc_len_predict_cum;
+  arc_len_predict_cum.push_back(0.0);
   for(int i = 0; i < params_->prediction_horizon; i++){
-    s_predict_cum.push_back(s_predict_cum.back() + s_predict);
+    arc_len_predict_cum.push_back(arc_len_predict_cum.back() + arc_len_predict);
   }
 
 
   std::vector<double> x_refs;
   std::vector<double> y_refs;
-  int s_path_idx = 1;
-  int s_predict_idx = 1;
+  int arc_len_path_idx = 1;
+  int arc_len_predict_idx = 1;
 
-  while(s_predict_idx < params_->prediction_horizon + 1){
+  while(arc_len_predict_idx < params_->prediction_horizon + 1){
 
-    while(s_path_cum[s_path_idx] < s_predict_cum[s_predict_idx] && s_path_idx < s_path_cum.size() - 1){
-      s_path_idx++;
+    while(arc_len_path_cum[arc_len_path_idx] < arc_len_predict_cum[arc_len_predict_idx]
+      && arc_len_path_idx < (int)arc_len_path_cum.size() - 1)
+    {
+      arc_len_path_idx++;
     }
 
-    double ratio = (s_predict_cum[s_predict_idx] - s_path_cum[s_path_idx - 1]) / (s_path_cum[s_path_idx] - s_path_cum[s_path_idx - 1]);
+    double ratio = (arc_len_predict_cum[arc_len_predict_idx] - arc_len_path_cum[arc_len_path_idx - 1]) / 
+      (arc_len_path_cum[arc_len_path_idx] - arc_len_path_cum[arc_len_path_idx - 1]);
     
-    double x_k0 = pruned_path.poses[s_path_idx - 1].pose.position.x;
-    double x_k1 = pruned_path.poses[s_path_idx].pose.position.x;
+    double x_k0 = pruned_path.poses[arc_len_path_idx - 1].pose.position.x;
+    double x_k1 = pruned_path.poses[arc_len_path_idx].pose.position.x;
     double x_ref = lerp(x_k0, x_k1, ratio);
     x_refs.push_back(x_ref);
     
-    double y_k0 = pruned_path.poses[s_path_idx - 1].pose.position.y;
-    double y_k1 = pruned_path.poses[s_path_idx].pose.position.y;
+    double y_k0 = pruned_path.poses[arc_len_path_idx - 1].pose.position.y;
+    double y_k1 = pruned_path.poses[arc_len_path_idx].pose.position.y;
     double y_ref = lerp(y_k0, y_k1, ratio);
     y_refs.push_back(y_ref);
 
-    s_predict_idx++;
+    arc_len_predict_idx++;
   }
 
 
@@ -108,7 +112,6 @@ Eigen::VectorXd PathManager::computeReferencePath(
   for(int i = 0; i < params_->prediction_horizon - 1; i++){
     double dx_ref = 0.0;
     double dy_ref = 0.0;
-    double theta_ref = 0.0;
     dx_ref = x_refs[i + 1] - x_refs[i];
     dy_ref = y_refs[i + 1] - y_refs[i];
     theta_refs.push_back(std::atan2(dy_ref, dx_ref));
@@ -150,11 +153,10 @@ int PathManager::findReferenceWaypointIndex(
 
     double x_gp_i1 = global_path_.poses[i + 1].pose.position.x;
     double y_gp_i1 = global_path_.poses[i + 1].pose.position.y;
-
     double hypot = std::hypot(x_rob - x_gp_i0, y_rob - y_gp_i0);
+
     std::vector<double> v_rob = {x_rob - x_gp_i0, y_rob - y_gp_i0}; // vector from i waypoint to robot
     std::vector<double> v_wps = {x_gp_i1 - x_gp_i0, y_gp_i1 - y_gp_i0}; // vector from i waypoint to i+1 waypoint along path
-    
     double ip_rob = std::inner_product(v_rob.begin(), v_rob.end(), v_wps.begin(), 0.0);
     if (hypot < ref_wp_dist && ip_rob >= 0){
       ref_wp_dist = hypot;
@@ -183,8 +185,8 @@ PathManager::findProjectionPoint(
   double x_gp_i1 = global_path_.poses[ref_wp_idx + 1].pose.position.x;
   double y_gp_i1 = global_path_.poses[ref_wp_idx + 1].pose.position.y;
 
-  std::vector<double> v_rob = {x_rob - x_gp_i0, y_rob - y_gp_i0}; // vector from closest waypoint to robot
-  std::vector<double> v_wps = {x_gp_i1 - x_gp_i0, y_gp_i1 - y_gp_i0}; // vector from closest waypoint to next waypoint along path
+  std::vector<double> v_rob = {x_rob - x_gp_i0, y_rob - y_gp_i0}; // vector from i waypoint to robot
+  std::vector<double> v_wps = {x_gp_i1 - x_gp_i0, y_gp_i1 - y_gp_i0}; // vector from i waypoint to i+1 waypoint along path
   
   double ip_rob = std::inner_product(v_rob.begin(), v_rob.end(), v_wps.begin(), 0.0);
   double ip_wp = std::inner_product(v_wps.begin(), v_wps.end(), v_wps.begin(), 0.0);
