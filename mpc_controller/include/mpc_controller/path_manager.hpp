@@ -36,18 +36,22 @@ private:
   Parameters* params_;
   
   std::shared_ptr<rclcpp::Publisher<geometry_msgs::msg::PoseStamped>> projection_point_publisher_;
-  std::shared_ptr<rclcpp::Publisher<nav_msgs::msg::Path>> lerp_ref_path_publisher_;
+  std::shared_ptr<rclcpp::Publisher<nav_msgs::msg::Path>> reference_path_publisher_;
   std::shared_ptr<rclcpp::Publisher<nav_msgs::msg::Path>> optimal_trajectory_publisher_;
 
   int waypoints_num_;
 
   int findReferenceWaypointIndex(const geometry_msgs::msg::PoseStamped& robot_pose);
   geometry_msgs::msg::PoseStamped findProjectionPoint(const geometry_msgs::msg::PoseStamped& robot_pose, int ref_wp_idx);
-
+  
+  void publishReferencePath(const Eigen::VectorXd& reference_path);
+  
   template<typename TypeT>
   inline TypeT lerp(TypeT first_point, TypeT second_point, TypeT ratio){
     return first_point + ratio * (second_point - first_point);
   }
+  
+  nav_msgs::msg::Path convertEigenVectorToPathMsg(const Eigen::VectorXd& reference_path);
 
 };
 #endif  //PATH_MANAGER_HPP_

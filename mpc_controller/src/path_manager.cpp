@@ -13,7 +13,7 @@ void PathManager::configure(
   projection_point_publisher_ = node_->create_publisher<geometry_msgs::msg::PoseStamped>(
     "projection_point",
     10);
-  lerp_ref_path_publisher_ = node_->create_publisher<nav_msgs::msg::Path>(
+  reference_path_publisher_ = node_->create_publisher<nav_msgs::msg::Path>(
     "reference_path", 
     10);
   optimal_trajectory_publisher_ = node_->create_publisher<nav_msgs::msg::Path>(
@@ -122,22 +122,13 @@ Eigen::VectorXd PathManager::computeReferencePath(
   }
 
 
-  nav_msgs::msg::Path lerp_ref_path;
-  lerp_ref_path.header.frame_id = global_path_.header.frame_id;
-  lerp_ref_path.header.stamp = clock_->now();
-  lerp_ref_path.poses.resize(params_->prediction_horizon);
   reference_path_.resize(params_->prediction_horizon * params_->nx);
   reference_path_.setZero();
-  tf2::Quaternion q;
   for(int i = 0; i < params_->prediction_horizon; i++){
     reference_path_.segment(i * params_->nx, params_->nx) << x_refs[i], y_refs[i], theta_refs[i];
-    lerp_ref_path.poses[i].pose.position.x = x_refs[i];
-    lerp_ref_path.poses[i].pose.position.y = y_refs[i];
-    q.setRPY(0, 0, theta_refs[i]);
-    lerp_ref_path.poses[i].pose.orientation = tf2::toMsg(q);
   }
 
-  lerp_ref_path_publisher_->publish(lerp_ref_path);
+  publishReferencePath(reference_path_);
   
   // TODO: express coordinates in a moving coordinate system instead of global
   return reference_path_;
@@ -210,18 +201,34 @@ PathManager::findProjectionPoint(
 void PathManager::publishOptimalTrajectory(
   const Eigen::VectorXd& predicted_state)
 {
-  nav_msgs::msg::Path optimal_trajectory;
-  optimal_trajectory.header.frame_id = global_path_.header.frame_id;
-  optimal_trajectory.header.stamp = clock_->now();
-  optimal_trajectory.poses.resize(params_->prediction_horizon);
-  
-  tf2::Quaternion q;
-  for(int i = 0; i < params_->prediction_horizon; i++){
-    optimal_trajectory.poses[i].pose.position.x = predicted_state[i * params_->nx];
-    optimal_trajectory.poses[i].pose.position.y = predicted_state[i * params_->nx + 1];
-    q.setRPY(0, 0, predicted_state[i * params_->nx + 2]);
-    optimal_trajectory.poses[i].pose.orientation = tf2::toMsg(q);
-  }
-
+  nav_msgs::msg::Path optimal_trajectory = convertEigenVectorToPathMsg(predicted_state);
   optimal_trajectory_publisher_->publish(optimal_trajectory);
+}
+
+
+void PathManager::publishReferencePath(
+  const Eigen::VectorXd& reference_path)
+{
+  nav_msgs::msg::Path reference_path_msg = convertEigenVectorToPathMsg(reference_path);
+  reference_path_publisher_->publish(reference_path_msg);
+}
+
+
+nav_msgs::msg::Path 
+PathManager::convertEigenVectorToPathMsg(
+  const Eigen::VectorXd& path)
+{ 
+  nav_msgs::msg::Path path_msg;
+  path_msg.poses.resize(params_->prediction_horizon);
+  path_msg.header.frame_id = global_path_.header.frame_id;
+  path_msg.header.stamp = clock_->now();
+  tf2::Quaternion q;
+
+  for(int i = 0; i < params_->prediction_horizon; i++){
+    path_msg.poses[i].pose.position.x = path[i * params_->nx];
+    path_msg.poses[i].pose.position.y = path[i * params_->nx + 1];
+    q.setRPY(0, 0, path[i * params_->nx + 2]);
+    path_msg.poses[i].pose.orientation = tf2::toMsg(q);
+  }
+  return path_msg;
 }
