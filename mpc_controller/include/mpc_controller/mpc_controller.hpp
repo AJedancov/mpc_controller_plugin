@@ -54,15 +54,15 @@ private:
   ParameterManager parameters_manager_;
   Parameters* params_;
 
-  Eigen::VectorXd x_k_;
+  Eigen::VectorXd x0_;
   Eigen::VectorXd X_ref_;
 
   Eigen::MatrixXd A_;
   Eigen::MatrixXd B_;
   Eigen::MatrixXd C_;
   
-  Eigen::MatrixXd A_blk_;
-  Eigen::MatrixXd B_blk_;
+  Eigen::MatrixXd A_stacked_;
+  Eigen::MatrixXd B_stacked_;
 
   // Weighting matrices
   Eigen::MatrixXd Q_;
@@ -71,6 +71,14 @@ private:
   Eigen::MatrixXd Q_blk_;
   Eigen::MatrixXd R_blk_;
 
+  Eigen::MatrixXd stackMatrixA(
+    const Eigen::MatrixXd& A, 
+    const Eigen::MatrixXd& C);
+  
+  Eigen::MatrixXd stackMatrixB(
+    const Eigen::MatrixXd& A, 
+    const Eigen::MatrixXd& B, 
+    const Eigen::MatrixXd& C);
 };
 
 } // namespace mpc_controller

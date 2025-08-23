@@ -23,7 +23,7 @@ void MPCController::configure(
 
   path_manager_.configure(parent, params_);
 
-  x_k_.resize(params_->nx);
+  x0_.resize(params_->nx);
   X_ref_.resize(params_->prediction_horizon * params_->nx);
 
   // Set matrix dimensions
@@ -32,8 +32,9 @@ void MPCController::configure(
   C_.resize(params_->ny, params_->nx);
   C_ << Eigen::MatrixXd::Identity(params_->ny, params_->nx);
 
-  A_blk_.resize(params_->prediction_horizon * params_->ny, params_->nx);
-  B_blk_.resize(params_->prediction_horizon * params_->ny, params_->prediction_horizon * params_->nu);
+  A_stacked_.resize(params_->prediction_horizon * params_->ny, params_->nx);
+  B_stacked_.resize(params_->prediction_horizon * params_->ny, 
+    params_->prediction_horizon * params_->nu);
 
   Q_.resize(params_->ny, params_->ny);
   Q_ << Eigen::MatrixXd::Identity(params_->ny, params_->ny) * 10;
@@ -71,9 +72,9 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   X_ref_ = path_manager_.computeReferencePath(robot_pose);
 
   double yaw = tf2::getYaw(robot_pose.pose.orientation);
-  x_k_ << robot_pose.pose.position.x,
-          robot_pose.pose.position.y,
-          yaw;
+  x0_ << robot_pose.pose.position.x,
+         robot_pose.pose.position.y,
+         yaw;
 
   // Define system dynamic
   double linear_vel = robot_velocity.linear.x;
@@ -94,27 +95,8 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   // =======================
   // === System stacking ===
   // =======================
-
-  // Stacking A matrix
-  Eigen::MatrixXd A_pow(A_.rows(), A_.cols());
-  A_pow << A_;
-
-  A_blk_.setZero();
-  for(int row = 0; row < params_->prediction_horizon; row++){
-    if(row) A_pow *= A_;
-    A_blk_.block(row * params_->ny, 0, params_->ny, params_->nx) = C_ * A_pow;
-  }
-
-  // Stacking B matrix
-  A_pow.setZero();
-  B_blk_.setZero();
-  for(int col = 0; col < params_->prediction_horizon; col++){
-    A_pow << Eigen::MatrixXd::Identity(A_pow.rows(), A_pow.cols());
-    for(int row = 0; row < params_->prediction_horizon - col; row++){
-      if(row) A_pow *= A_;
-      B_blk_.block((row + col) * params_->nx, col * params_->nu, params_->nx, params_->nu) = C_ * A_pow * B_;
-    }
-  }
+  A_stacked_ = stackMatrixA(A_, C_);
+  B_stacked_ = stackMatrixB(A_, B_, C_);
 
   // ==================
   // === QP problem ===
@@ -125,10 +107,11 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   // Subject to:
   // Du <= b
 
-  Eigen::VectorXd Ax_blk(params_->prediction_horizon * params_->ny);
-  Ax_blk.setZero();
+  Eigen::VectorXd Ax0_stacked(params_->prediction_horizon * params_->ny);
+  Ax0_stacked.setZero();
   for(int row = 0; row < params_->prediction_horizon; row++){
-    Ax_blk.segment(row * params_->ny, params_->nx) = A_blk_.block(row * params_->ny, 0, params_->ny, params_->nx) * x_k_;
+    Ax0_stacked.segment(row * params_->ny, params_->nx) = 
+      A_stacked_.block(row * params_->ny, 0, params_->ny, params_->nx) * x0_;
   }
 
   for(int row = 0; row < params_->prediction_horizon; row++){
@@ -138,11 +121,11 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
 
   // Hessian matrixs
   Eigen::MatrixXd H(params_->prediction_horizon * params_->nu, params_->prediction_horizon * params_->nu); 
-  H = 2 * (B_blk_.transpose() * Q_blk_ * B_blk_ + R_blk_);  
+  H = 2 * (B_stacked_.transpose() * Q_blk_ * B_stacked_ + R_blk_);  
 
   // Linear term
   Eigen::VectorXd f(params_->prediction_horizon * params_->nu);
-  f = 2 * B_blk_.transpose() * Q_blk_ * (Ax_blk - X_ref_); 
+  f = 2 * B_stacked_.transpose() * Q_blk_ * (Ax0_stacked - X_ref_); 
   
   Eigen::MatrixXd D(params_->prediction_horizon * params_->nu, params_->prediction_horizon * params_->nu);
   D << Eigen::MatrixXd::Identity(params_->prediction_horizon * params_->nu, params_->prediction_horizon * params_->nu);
@@ -163,7 +146,7 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   qp_solver.solve(H, f, D, lb, ub , u);
 
   Eigen::VectorXd X_pred(params_->prediction_horizon * params_->nx);
-  X_pred << Ax_blk + B_blk_ * u;
+  X_pred << Ax0_stacked + B_stacked_ * u;
   path_manager_.publishOptimalTrajectory(X_pred);
 
   // RCLCPP_INFO_STREAM(logger_, "Optimized state:\n" << X_pred);
@@ -175,6 +158,55 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   cmd_vel.twist.linear.x = u[0];
   cmd_vel.twist.angular.z = u[1];
   return cmd_vel;
+}
+
+
+Eigen::MatrixXd MPCController::stackMatrixA(
+  const Eigen::MatrixXd& A,
+  const Eigen::MatrixXd& C)
+{
+  int A_rows_number = A.rows();
+  int A_cols_number = A.cols();
+  int C_rows_number = C.rows();
+  Eigen::MatrixXd A_pow(A_rows_number, A_cols_number);
+  A_pow << A;
+
+  Eigen::MatrixXd A_blk(params_->prediction_horizon * C_rows_number, A_cols_number);
+  for(int predict_step = 0; predict_step < params_->prediction_horizon; predict_step++){
+      if(predict_step){
+        A_pow *= A;
+      }
+    A_blk.block(predict_step * C_rows_number, 0, C_rows_number, A_cols_number) = C * A_pow;
+  }
+  return A_blk;
+}
+
+
+Eigen::MatrixXd MPCController::stackMatrixB(
+  const Eigen::MatrixXd& A,
+  const Eigen::MatrixXd& B,
+  const Eigen::MatrixXd& C)
+{
+  int A_rows_number = A.rows();
+  int A_cols_number = A.cols();
+  int C_rows_number = C.rows();
+  Eigen::MatrixXd A_pow(A_rows_number, A_cols_number);
+  A_pow.setZero();
+
+  int B_cols_number = B.cols();
+  Eigen::MatrixXd B_blk(params_->prediction_horizon * C_rows_number, 
+    params_->prediction_horizon * B_cols_number);
+  for(int state_step = 0; state_step < params_->prediction_horizon; state_step++){
+    A_pow << Eigen::MatrixXd::Identity(A_pow.rows(), A_pow.cols());
+    for(int predict_step = 0; predict_step < params_->prediction_horizon - state_step; predict_step++){
+      if(predict_step){
+        A_pow *= A;
+      }
+      B_blk.block((predict_step + state_step) * C_rows_number, state_step * B_cols_number,
+        C_rows_number, B_cols_number) = C * A_pow * B;
+    }
+  }
+  return B_blk;
 }
 
 
