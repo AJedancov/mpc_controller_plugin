@@ -69,6 +69,7 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   (void) robot_velocity;
   (void) goal_checker;
 
+  X_ref_.setZero();
   X_ref_ = path_manager_.computeReferencePath(robot_pose);
 
   double yaw = tf2::getYaw(robot_pose.pose.orientation);
@@ -104,12 +105,14 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   int B_rows_number = B_.rows();
   int B_cols_number = B_.cols();
   Eigen::MatrixXd A_augmented(A_rows_number + B_cols_number, A_cols_number + B_cols_number);
+  A_augmented.setZero();
   A_augmented.block(0, 0, A_rows_number, A_cols_number) = A_;
   A_augmented.block(0, A_cols_number, B_rows_number, B_cols_number) = B_;
   A_augmented.block(A_rows_number, A_cols_number, B_cols_number, B_cols_number) =
     Eigen::MatrixXd::Identity(B_cols_number, B_cols_number);
 
   Eigen::MatrixXd B_augmented(B_rows_number + B_cols_number, B_cols_number);
+  B_augmented.setZero();
   B_augmented.block(0, 0, B_rows_number, B_cols_number) = B_;
   B_augmented.block(B_rows_number, 0, B_cols_number, B_cols_number) =
     Eigen::MatrixXd::Identity(B_cols_number, B_cols_number);
@@ -117,6 +120,7 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   int C_rows_number = C_.rows();
   int C_cols_number = C_.cols();
   Eigen::MatrixXd C_augmented(C_rows_number, C_cols_number + B_cols_number);
+  C_augmented.setZero();
   C_augmented.block(0, 0, C_rows_number, C_cols_number) = C_;
 
 
@@ -145,6 +149,8 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
       A_stacked_.block(row * params_->ny, 0, params_->ny, params_->nx) * x0_;
   }
 
+  Q_blk_.setZero();
+  R_blk_.setZero();
   for(int row = 0; row < params_->prediction_horizon; row++){
     Q_blk_.block(row * params_->nx, row * params_->nx, params_->nx, params_->nx) = Q_;
     R_blk_.block(row * params_->nu, row * params_->nu, params_->nu, params_->nu) = R_;
@@ -164,6 +170,8 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   Eigen::VectorXd lb (params_->prediction_horizon * params_->nu);
   Eigen::VectorXd ub (params_->prediction_horizon * params_->nu);
   
+  lb.setZero();
+  ub.setZero();
   for(int row = 0; row < params_->prediction_horizon; row++){
     lb.segment(row * params_->nu, params_->nu) << params_->min_lin_vel, params_->min_ang_vel;
     ub.segment(row * params_->nu, params_->nu) << params_->max_lin_vel, params_->max_ang_vel;
@@ -203,6 +211,7 @@ Eigen::MatrixXd MPCController::stackMatrixA(
   A_pow << A;
 
   Eigen::MatrixXd A_blk(params_->prediction_horizon * C_rows_number, A_cols_number);
+  A_blk.setZero();
   for(int predict_step = 0; predict_step < params_->prediction_horizon; predict_step++){
       if(predict_step){
         A_pow *= A;
@@ -227,6 +236,7 @@ Eigen::MatrixXd MPCController::stackMatrixB(
   int B_cols_number = B.cols();
   Eigen::MatrixXd B_blk(params_->prediction_horizon * C_rows_number, 
     params_->prediction_horizon * B_cols_number);
+  B_blk.setZero();
   for(int state_step = 0; state_step < params_->prediction_horizon; state_step++){
     A_pow << Eigen::MatrixXd::Identity(A_pow.rows(), A_pow.cols());
     for(int predict_step = 0; predict_step < params_->prediction_horizon - state_step; predict_step++){
