@@ -25,6 +25,8 @@ void MPCController::configure(
 
   x0_.resize(params_->nx);
   X_ref_.resize(params_->prediction_horizon * params_->nx);
+  u_last.resize(params_->nu);
+  u_last.setZero();
 
   // Set matrix dimensions
   A_.resize(params_->nx, params_->nx);
@@ -136,7 +138,6 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   // ==================
   // === QP problem ===
   // ==================
-
   // Represent Cost function as QP problem
   // J = 0.5 u H u^T + f^T u
   // Subject to:
@@ -181,11 +182,12 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   
   osqp::OSQPSolverInterface qp_solver(logger_);
 
-  Eigen::VectorXd u(params_->prediction_horizon * params_->nu);
-  qp_solver.solve(H, f, D, lb, ub , u);
+  Eigen::VectorXd delta_u_optimal(params_->prediction_horizon * params_->nu);
+  delta_u_optimal.setZero();
+  qp_solver.solve(H, f, D, lb, ub , delta_u_optimal);
 
   Eigen::VectorXd X_pred(params_->prediction_horizon * params_->nx);
-  X_pred << Ax0_stacked + B_stacked_ * u;
+  X_pred << Ax0_stacked + B_stacked_ * delta_u_optimal;
   path_manager_.publishOptimalTrajectory(X_pred);
 
   // RCLCPP_INFO_STREAM(logger_, "Optimized state:\n" << X_pred);
@@ -194,8 +196,13 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   geometry_msgs::msg::TwistStamped cmd_vel;
   cmd_vel.header.frame_id = robot_pose.header.frame_id;
   cmd_vel.header.stamp = clock_->now();
-  cmd_vel.twist.linear.x = u[0];
-  cmd_vel.twist.angular.z = u[1];
+  cmd_vel.twist.linear.x = u_last[0] + delta_u_optimal[0];
+  cmd_vel.twist.angular.z = u_last[1] + delta_u_optimal[1];
+
+  // Update last control input
+  u_last[0] = delta_u_optimal[0];
+  u_last[1] = delta_u_optimal[1];
+
   return cmd_vel;
 }
 
