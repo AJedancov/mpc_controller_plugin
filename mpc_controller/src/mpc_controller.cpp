@@ -92,11 +92,42 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
         b21, 0,
         0, params_->dt;
 
+  // === Input increment model ===
+  // [x_k+1] = [A B]*[x_k  ]+[B]*delta_u
+  // [u_k]     [0 I] [u_k-1] [I]
+  // 
+  // y_k = [C 0]*[x_k  ]
+  //             [u_K-1] 
+
+  int A_rows_number = A_.rows();
+  int A_cols_number = A_.cols();
+  int B_rows_number = B_.rows();
+  int B_cols_number = B_.cols();
+  Eigen::MatrixXd A_augmented(A_rows_number + B_cols_number, A_cols_number + B_cols_number);
+  A_augmented.block(0, 0, A_rows_number, A_cols_number) = A_;
+  A_augmented.block(0, A_cols_number, B_rows_number, B_cols_number) = B_;
+  A_augmented.block(A_rows_number, A_cols_number, B_cols_number, B_cols_number) =
+    Eigen::MatrixXd::Identity(B_cols_number, B_cols_number);
+
+  Eigen::MatrixXd B_augmented(B_rows_number + B_cols_number, B_cols_number);
+  B_augmented.block(0, 0, B_rows_number, B_cols_number) = B_;
+  B_augmented.block(B_rows_number, 0, B_cols_number, B_cols_number) =
+    Eigen::MatrixXd::Identity(B_cols_number, B_cols_number);
+
+  int C_rows_number = C_.rows();
+  int C_cols_number = C_.cols();
+  Eigen::MatrixXd C_augmented(C_rows_number, C_cols_number + B_cols_number);
+  C_augmented.block(0, 0, C_rows_number, C_cols_number) = C_;
+
+
   // =======================
   // === System stacking ===
   // =======================
-  A_stacked_ = stackMatrixA(A_, C_);
-  B_stacked_ = stackMatrixB(A_, B_, C_);
+  // A_stacked_ = stackMatrixA(A_, C_);
+  // B_stacked_ = stackMatrixB(A_, B_, C_);
+
+  A_stacked_ = stackMatrixA(A_augmented, C_augmented);
+  B_stacked_ = stackMatrixB(A_augmented, B_augmented, C_augmented);
 
   // ==================
   // === QP problem ===
