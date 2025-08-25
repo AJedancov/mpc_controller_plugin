@@ -1,0 +1,57 @@
+#include "rclcpp/rclcpp.hpp"
+#include "rclcpp_lifecycle/lifecycle_node.hpp"
+
+#include "mpc_controller/parameter_manager.hpp"
+#include "mpc_controller/osqp_solver_interface.hpp"
+#include <Eigen/Core>
+
+
+#ifndef QP_PROBLEM_MANAGER_HPP_
+#define QP_PROBLEM_MANAGER_HPP_
+
+
+class QPProblemManager{
+public:
+  QPProblemManager();
+
+  void configure(
+  rclcpp_lifecycle::LifecycleNode::WeakPtr parent,
+  Parameters* params);
+
+  void update(
+    Eigen::MatrixXd A, 
+    Eigen::MatrixXd B, 
+    Eigen::VectorXd x_init, 
+    Eigen::MatrixXd X_ref);
+
+  Eigen::VectorXd solve();
+
+private:
+  rclcpp_lifecycle::LifecycleNode::SharedPtr node_;
+  rclcpp::Clock::SharedPtr clock_;
+  Parameters* params_;
+
+  // Hessian matrix
+  Eigen::MatrixXd H_;
+
+  // Linear term
+  Eigen::VectorXd f_;
+
+  // Weighting matrices
+  Eigen::MatrixXd Q_;
+  Eigen::MatrixXd R_;
+
+  Eigen::MatrixXd Q_blk_;
+  Eigen::MatrixXd R_blk_;
+  
+  // Constraints
+  Eigen::MatrixXd D_;
+  Eigen::VectorXd lower_bound_;
+  Eigen::VectorXd upper_bound_;
+
+  Eigen::VectorXd u_optimal_;
+
+  osqp::OSQPSolverInterface osqp_solver_;
+
+};
+#endif  //QP_PROBLEM_MANAGER_HPP_

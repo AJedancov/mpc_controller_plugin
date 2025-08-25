@@ -6,7 +6,7 @@
 
 #include "mpc_controller/parameter_manager.hpp"
 #include "mpc_controller/path_manager.hpp"
-#include "mpc_controller/osqp_solver_interface.hpp"
+#include "mpc_controller/qp_problem_manager.hpp"
 #include <Eigen/Core>
 
 #ifndef MPC_CONTROLLER_HPP_
@@ -52,9 +52,10 @@ private:
 
   PathManager path_manager_;
   ParameterManager parameters_manager_;
+  QPProblemManager qp_problem_manager_;
   Parameters* params_;
 
-  Eigen::VectorXd x0_;
+  Eigen::VectorXd X_init_;
   Eigen::VectorXd X_ref_;
   Eigen::VectorXd u_last;
 
@@ -64,13 +65,6 @@ private:
   
   Eigen::MatrixXd A_stacked_;
   Eigen::MatrixXd B_stacked_;
-
-  // Weighting matrices
-  Eigen::MatrixXd Q_;
-  Eigen::MatrixXd R_;
-
-  Eigen::MatrixXd Q_blk_;
-  Eigen::MatrixXd R_blk_;
 
   Eigen::MatrixXd stackMatrixA(
     const Eigen::MatrixXd& A, 

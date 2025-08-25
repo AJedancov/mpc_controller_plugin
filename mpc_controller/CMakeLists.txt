@@ -43,6 +43,7 @@ add_library(mpc_controller SHARED
   ${PROJECT_SOURCE_DIR}/src/mpc_controller.cpp
   ${PROJECT_SOURCE_DIR}/src/path_manager.cpp
   ${PROJECT_SOURCE_DIR}/src/osqp_solver_interface.cpp
+  ${PROJECT_SOURCE_DIR}/src/qp_problem_manager.cpp
 )
 
 ament_target_dependencies(mpc_controller PUBLIC ${dependencies})

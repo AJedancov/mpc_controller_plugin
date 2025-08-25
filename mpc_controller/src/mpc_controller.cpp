@@ -22,8 +22,9 @@ void MPCController::configure(
   params_ = parameters_manager_.get_parameters();
 
   path_manager_.configure(parent, params_);
+  qp_problem_manager_.configure(parent, params_);
 
-  x0_.resize(params_->nx);
+  X_init_.resize(params_->nx);
   X_ref_.resize(params_->prediction_horizon * params_->nx);
   u_last.resize(params_->nu);
   u_last.setZero();
@@ -37,15 +38,6 @@ void MPCController::configure(
   A_stacked_.resize(params_->prediction_horizon * params_->ny, params_->nx);
   B_stacked_.resize(params_->prediction_horizon * params_->ny, 
     params_->prediction_horizon * params_->nu);
-
-  Q_.resize(params_->ny, params_->ny);
-  Q_ << Eigen::MatrixXd::Identity(params_->ny, params_->ny) * 10;
-
-  R_.resize(params_->nu, params_->nu);
-  R_ << Eigen::MatrixXd::Identity(params_->nu, params_->nu) * 0.1;
-
-  Q_blk_.resize(params_->prediction_horizon * Q_.rows(), params_->prediction_horizon * Q_.cols());
-  R_blk_.resize(params_->prediction_horizon * R_.rows(), params_->prediction_horizon * R_.cols());
 }
 
 void MPCController::cleanup(){}
@@ -75,9 +67,9 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   X_ref_ = path_manager_.computeReferencePath(robot_pose);
 
   double yaw = tf2::getYaw(robot_pose.pose.orientation);
-  x0_ << robot_pose.pose.position.x,
-         robot_pose.pose.position.y,
-         yaw;
+  X_init_ << robot_pose.pose.position.x,
+             robot_pose.pose.position.y,
+             yaw;
 
   // Define system dynamic
   double linear_vel = robot_velocity.linear.x;
@@ -138,57 +130,14 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   // ==================
   // === QP problem ===
   // ==================
-  // Represent Cost function as QP problem
-  // J = 0.5 u H u^T + f^T u
-  // Subject to:
-  // Du <= b
-
-  Eigen::VectorXd Ax0_stacked(params_->prediction_horizon * params_->ny);
-  Ax0_stacked.setZero();
-  for(int row = 0; row < params_->prediction_horizon; row++){
-    Ax0_stacked.segment(row * params_->ny, params_->nx) = 
-      A_stacked_.block(row * params_->ny, 0, params_->ny, params_->nx) * x0_;
-  }
-
-  Q_blk_.setZero();
-  R_blk_.setZero();
-  for(int row = 0; row < params_->prediction_horizon; row++){
-    Q_blk_.block(row * params_->nx, row * params_->nx, params_->nx, params_->nx) = Q_;
-    R_blk_.block(row * params_->nu, row * params_->nu, params_->nu, params_->nu) = R_;
-  }
-
-  // Hessian matrixs
-  Eigen::MatrixXd H(params_->prediction_horizon * params_->nu, params_->prediction_horizon * params_->nu); 
-  H = 2 * (B_stacked_.transpose() * Q_blk_ * B_stacked_ + R_blk_);  
-
-  // Linear term
-  Eigen::VectorXd f(params_->prediction_horizon * params_->nu);
-  f = 2 * B_stacked_.transpose() * Q_blk_ * (Ax0_stacked - X_ref_); 
-  
-  Eigen::MatrixXd D(params_->prediction_horizon * params_->nu, params_->prediction_horizon * params_->nu);
-  D << Eigen::MatrixXd::Identity(params_->prediction_horizon * params_->nu, params_->prediction_horizon * params_->nu);
-
-  Eigen::VectorXd lb (params_->prediction_horizon * params_->nu);
-  Eigen::VectorXd ub (params_->prediction_horizon * params_->nu);
-  
-  lb.setZero();
-  ub.setZero();
-  for(int row = 0; row < params_->prediction_horizon; row++){
-    lb.segment(row * params_->nu, params_->nu) << params_->min_lin_vel, params_->min_ang_vel;
-    ub.segment(row * params_->nu, params_->nu) << params_->max_lin_vel, params_->max_ang_vel;
-  }
-
-  // === Solve QP problem ===
-  
-  osqp::OSQPSolverInterface qp_solver(logger_);
+  qp_problem_manager_.update(A_stacked_, B_stacked_, X_init_, X_ref_);
 
   Eigen::VectorXd delta_u_optimal(params_->prediction_horizon * params_->nu);
-  delta_u_optimal.setZero();
-  qp_solver.solve(H, f, D, lb, ub , delta_u_optimal);
+  delta_u_optimal = qp_problem_manager_.solve();
 
-  Eigen::VectorXd X_pred(params_->prediction_horizon * params_->nx);
-  X_pred << Ax0_stacked + B_stacked_ * delta_u_optimal;
-  path_manager_.publishOptimalTrajectory(X_pred);
+  // Eigen::VectorXd X_pred(params_->prediction_horizon * params_->nx);
+  // X_pred << Ax_init + B_stacked_ * delta_u_optimal;
+  // path_manager_.publishOptimalTrajectory(X_pred);
 
   // RCLCPP_INFO_STREAM(logger_, "Optimized state:\n" << X_pred);
   // RCLCPP_INFO_STREAM(logger_, "State error:\n" << X_ref_ - X_pred);
