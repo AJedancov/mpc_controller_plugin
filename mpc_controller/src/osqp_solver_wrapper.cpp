@@ -1,17 +1,15 @@
-#include "mpc_controller/osqp_solver_interface.hpp"
+#include "mpc_controller/osqp_solver_wrapper.hpp"
 
 
-osqp::OSQPSolverInterface::OSQPSolverInterface(){
-  
-}
+osqp::OSQPSolverWrapper::OSQPSolverWrapper(){}
 
 
-osqp::OSQPSolverInterface::OSQPSolverInterface(const rclcpp::Logger &logger){
+osqp::OSQPSolverWrapper::OSQPSolverWrapper(const rclcpp::Logger &logger){
   logger_ = logger;
 }
 
 
-void osqp::OSQPSolverInterface::solve(
+void osqp::OSQPSolverWrapper::solve(
   Eigen::MatrixXd& H, const Eigen::VectorXd& f,
   Eigen::MatrixXd& D, const Eigen::VectorXd& lb, const Eigen::VectorXd& ub, 
   Eigen::VectorXd& u)
@@ -56,7 +54,7 @@ void osqp::OSQPSolverInterface::solve(
 }
 
 
-void osqp::OSQPSolverInterface::convert_to_osqp_csc_matrix(Eigen::MatrixXd& M, OSQPCscMatrixHolder& M_osqp_csc){
+void osqp::OSQPSolverWrapper::convert_to_osqp_csc_matrix(Eigen::MatrixXd& M, OSQPCscMatrixHolder& M_osqp_csc){
 
   M.triangularView<Eigen::StrictlyLower>().setZero();
 

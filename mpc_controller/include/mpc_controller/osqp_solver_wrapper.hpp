@@ -5,8 +5,8 @@
 #include "rclcpp/rclcpp.hpp"
 
 
-#ifndef OSQP_SOLVER_INTERFACE_HPP_
-#define OSQP_SOLVER_INTERFACE_HPP_
+#ifndef OSQP_SOLVER_WRAPPER_HPP_
+#define OSQP_SOLVER_WRAPPER_HPP_
 
 namespace osqp
 {
@@ -18,10 +18,10 @@ struct OSQPCscMatrixHolder {
   std::vector<OSQPFloat> values_;
 };
 
-class OSQPSolverInterface {
+class OSQPSolverWrapper {
 public:
-  OSQPSolverInterface();
-  OSQPSolverInterface(const rclcpp::Logger &logger);
+  OSQPSolverWrapper();
+  OSQPSolverWrapper(const rclcpp::Logger &logger);
 
   void solve(
     Eigen::MatrixXd& H, const Eigen::VectorXd& f,
@@ -38,5 +38,4 @@ private:
 } // namespace osqp
 
 
-
-#endif  //OSQP_SOLVER_INTERFACE_HPP_
+#endif  //OSQP_SOLVER_WRAPPER_HPP_

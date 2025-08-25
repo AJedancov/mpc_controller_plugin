@@ -2,7 +2,7 @@
 #include "rclcpp_lifecycle/lifecycle_node.hpp"
 
 #include "mpc_controller/parameter_manager.hpp"
-#include "mpc_controller/osqp_solver_interface.hpp"
+#include "mpc_controller/osqp_solver_wrapper.hpp"
 #include <Eigen/Core>
 
 
@@ -51,7 +51,7 @@ private:
 
   Eigen::VectorXd u_optimal_;
 
-  osqp::OSQPSolverInterface osqp_solver_;
+  osqp::OSQPSolverWrapper osqp_solver_;
 
 };
 #endif  //QP_PROBLEM_MANAGER_HPP_
