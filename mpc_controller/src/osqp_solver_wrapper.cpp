@@ -1,60 +1,51 @@
 #include "mpc_controller/osqp_solver_wrapper.hpp"
 
 
-osqp::OSQPSolverWrapper::OSQPSolverWrapper(){}
-
-
-osqp::OSQPSolverWrapper::OSQPSolverWrapper(const rclcpp::Logger &logger){
-  logger_ = logger;
+osqp::OSQPSolverWrapper::OSQPSolverWrapper():
+  f_osqp_(nullptr),
+  lb_osqp_(nullptr), ub_osqp_(nullptr),
+  number_constraints_(0), number_variables_(0)
+{
+  settings_ = OSQPSettings_new();
 }
 
 
-void osqp::OSQPSolverWrapper::solve(
+void osqp::OSQPSolverWrapper::setup(
   Eigen::MatrixXd& H, const Eigen::VectorXd& f,
-  Eigen::MatrixXd& D, const Eigen::VectorXd& lb, const Eigen::VectorXd& ub, 
-  Eigen::VectorXd& u)
+  Eigen::MatrixXd& D, const Eigen::VectorXd& lb, const Eigen::VectorXd& ub)
 { 
+  convertToOSQPCscMatrix(H, H_osqp_csc_);
+  convertToOSQPCscMatrix(D, D_osqp_csc_);
 
-  OSQPCscMatrixHolder H_osqp_csc;
-  OSQPCscMatrixHolder D_osqp_csc;
+  f_osqp_ = f.data();
+  lb_osqp_ = lb.data();
+  ub_osqp_ = ub.data();
+  number_constraints_ = D.rows();
+  number_variables_ = H.cols();
 
-  convert_to_osqp_csc_matrix(H, H_osqp_csc);
-  convert_to_osqp_csc_matrix(D, D_osqp_csc);
-
-  const OSQPFloat* f_osqp = f.data();
-  const OSQPFloat* lb_osqp = lb.data();
-  const OSQPFloat* ub_osqp = ub.data();
-  const OSQPInt m = D.rows();
-  const OSQPInt n = H.cols();
-  OSQPSettings* settings = OSQPSettings_new();
-
-  OSQPInt exitflag = 0;
-  exitflag = osqp_setup(
+  osqp_setup(
     &osqp_solver_,
-    H_osqp_csc.matrix_ptr_.get(), 
-    f_osqp, 
-    D_osqp_csc.matrix_ptr_.get(), 
-    lb_osqp, 
-    ub_osqp, 
-    m, 
-    n, 
-    settings
-  );
+    H_osqp_csc_.matrix_ptr_.get(), 
+    f_osqp_, 
+    D_osqp_csc_.matrix_ptr_.get(), 
+    lb_osqp_, 
+    ub_osqp_, 
+    number_constraints_,
+    number_variables_, 
+    settings_);
+}
 
-  // RCLCPP_INFO_STREAM_ONCE(logger_, "osqp_setup exitflag: " << exitflag);
+
+void osqp::OSQPSolverWrapper::solve(Eigen::VectorXd& u){
+  osqp_solve(osqp_solver_);
   
-  if(!exitflag){
-    exitflag = osqp_solve(osqp_solver_);
-  }
-  // RCLCPP_INFO_STREAM_ONCE(logger_, "osqp_solve exitflag: " << exitflag);
-
-  for(int i = 0; i < f.rows(); i++){
+  for(int i = 0; i < number_variables_; i++){
     u[i] = osqp_solver_->solution->x[i];
   }
 }
 
 
-void osqp::OSQPSolverWrapper::convert_to_osqp_csc_matrix(Eigen::MatrixXd& M, OSQPCscMatrixHolder& M_osqp_csc){
+void osqp::OSQPSolverWrapper::convertToOSQPCscMatrix(Eigen::MatrixXd& M, OSQPCscMatrixHolder& M_osqp_csc){
 
   M.triangularView<Eigen::StrictlyLower>().setZero();
 

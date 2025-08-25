@@ -66,12 +66,12 @@ void QPProblemManager::update(
     lower_bound_.segment(predict_step * params_->nu, params_->nu) << params_->min_lin_vel, params_->min_ang_vel;
     upper_bound_.segment(predict_step * params_->nu, params_->nu) << params_->max_lin_vel, params_->max_ang_vel;
   }
+
+  osqp_solver_.setup(H_, f_, D_, lower_bound_, upper_bound_);
 }
 
 Eigen::VectorXd QPProblemManager::solve()
 {
-  u_optimal_.setZero();
-  osqp_solver_.solve(H_, f_, D_, lower_bound_, upper_bound_ , u_optimal_);
-
+  osqp_solver_.solve(u_optimal_);
   return u_optimal_;
 }
