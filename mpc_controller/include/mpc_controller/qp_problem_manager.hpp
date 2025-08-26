@@ -19,12 +19,13 @@ public:
   Parameters* params);
 
   void update(
-    Eigen::MatrixXd A, 
-    Eigen::MatrixXd B, 
-    Eigen::VectorXd x_init, 
-    Eigen::MatrixXd X_ref);
+  const Eigen::MatrixXd& A, 
+  const Eigen::MatrixXd& B,  
+  const Eigen::VectorXd& X_init, 
+  const Eigen::MatrixXd& X_ref);
 
-  Eigen::VectorXd solve();
+  void solve();
+  Eigen::VectorXd getOptimalControl();
 
 private:
   rclcpp_lifecycle::LifecycleNode::SharedPtr node_;
@@ -50,6 +51,7 @@ private:
   Eigen::VectorXd upper_bound_;
 
   Eigen::VectorXd u_optimal_;
+  Eigen::VectorXd u_last_;
 
   osqp::OSQPSolverWrapper osqp_solver_;
 

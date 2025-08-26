@@ -57,7 +57,6 @@ private:
 
   Eigen::VectorXd X_init_;
   Eigen::VectorXd X_ref_;
-  Eigen::VectorXd u_last;
 
   Eigen::MatrixXd A_;
   Eigen::MatrixXd B_;

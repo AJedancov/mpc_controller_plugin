@@ -2,6 +2,7 @@
 
 QPProblemManager::QPProblemManager(){}
 
+
 void QPProblemManager::configure(
   rclcpp_lifecycle::LifecycleNode::WeakPtr parent, 
   Parameters *params)
@@ -26,13 +27,16 @@ void QPProblemManager::configure(
   lower_bound_.resize(params_->prediction_horizon * params_->nu);
   upper_bound_.resize(params_->prediction_horizon * params_->nu);
   u_optimal_.resize(params_->prediction_horizon * params_->nu);
+
+  u_last_.resize(params_->prediction_horizon * params_->nu);
+  u_last_.setZero();
 }
 
 void QPProblemManager::update(
-  Eigen::MatrixXd A, 
-  Eigen::MatrixXd B,  
-  Eigen::VectorXd X_init, 
-  Eigen::MatrixXd X_ref)
+  const Eigen::MatrixXd& A, 
+  const Eigen::MatrixXd& B,  
+  const Eigen::VectorXd& X_init, 
+  const Eigen::MatrixXd& X_ref)
 {
 
   // Prepare matrices for the QP problem of the form:
@@ -63,15 +67,29 @@ void QPProblemManager::update(
   lower_bound_.setZero();
   upper_bound_.setZero();
   for(int predict_step = 0; predict_step < params_->prediction_horizon; predict_step++){
-    lower_bound_.segment(predict_step * params_->nu, params_->nu) << params_->min_lin_vel, params_->min_ang_vel;
-    upper_bound_.segment(predict_step * params_->nu, params_->nu) << params_->max_lin_vel, params_->max_ang_vel;
+    lower_bound_.segment(predict_step * params_->nu, params_->nu) << 
+      params_->min_lin_vel - u_last_[predict_step * params_->nu], params_->min_ang_vel - u_last_[predict_step * params_->nu + 1];
+    upper_bound_.segment(predict_step * params_->nu, params_->nu) << 
+      params_->max_lin_vel - u_last_[predict_step * params_->nu], params_->max_ang_vel - u_last_[predict_step * params_->nu + 1];
   }
 
   osqp_solver_.setup(H_, f_, D_, lower_bound_, upper_bound_);
 }
 
-Eigen::VectorXd QPProblemManager::solve()
+
+void QPProblemManager::solve()
 {
   osqp_solver_.solve(u_optimal_);
+
+  // The result of the optimization is the input increment delta_u
+  // To get current control: u_k = u_k-1 + delta_u
+  u_optimal_ << u_last_ + u_optimal_;
+  
+  // Update previous control input
+  u_last_ = u_optimal_;
+}
+
+
+Eigen::VectorXd QPProblemManager::getOptimalControl(){
   return u_optimal_;
 }

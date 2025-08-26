@@ -26,8 +26,6 @@ void MPCController::configure(
 
   X_init_.resize(params_->nx);
   X_ref_.resize(params_->prediction_horizon * params_->nx);
-  u_last.resize(params_->nu);
-  u_last.setZero();
 
   // Set matrix dimensions
   A_.resize(params_->nx, params_->nx);
@@ -131,9 +129,7 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   // === QP problem ===
   // ==================
   qp_problem_manager_.update(A_stacked_, B_stacked_, X_init_, X_ref_);
-
-  Eigen::VectorXd delta_u_optimal(params_->prediction_horizon * params_->nu);
-  delta_u_optimal = qp_problem_manager_.solve();
+  qp_problem_manager_.solve();
 
   // Eigen::VectorXd X_pred(params_->prediction_horizon * params_->nx);
   // X_pred << Ax_init + B_stacked_ * delta_u_optimal;
@@ -142,15 +138,17 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
   // RCLCPP_INFO_STREAM(logger_, "Optimized state:\n" << X_pred);
   // RCLCPP_INFO_STREAM(logger_, "State error:\n" << X_ref_ - X_pred);
   
+  Eigen::VectorXd u_optimal(params_->prediction_horizon * params_->nu);
+  u_optimal = qp_problem_manager_.getOptimalControl();
+
+  double lin_vel = u_optimal[0];
+  double ang_vel = u_optimal[1];
+
   geometry_msgs::msg::TwistStamped cmd_vel;
   cmd_vel.header.frame_id = robot_pose.header.frame_id;
   cmd_vel.header.stamp = clock_->now();
-  cmd_vel.twist.linear.x = u_last[0] + delta_u_optimal[0];
-  cmd_vel.twist.angular.z = u_last[1] + delta_u_optimal[1];
-
-  // Update last control input
-  u_last[0] = delta_u_optimal[0];
-  u_last[1] = delta_u_optimal[1];
+  cmd_vel.twist.linear.x = lin_vel;
+  cmd_vel.twist.angular.z = ang_vel;
 
   return cmd_vel;
 }
