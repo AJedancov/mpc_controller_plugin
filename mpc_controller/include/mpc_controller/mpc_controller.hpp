@@ -5,8 +5,7 @@
 #include "pluginlib/class_list_macros.hpp"
 
 #include "mpc_controller/parameter_manager.hpp"
-#include "mpc_controller/path_manager.hpp"
-#include "mpc_controller/qp_problem_manager.hpp"
+#include "mpc_controller/mpc.hpp"
 #include <Eigen/Core>
 
 #ifndef MPC_CONTROLLER_HPP_
@@ -46,33 +45,13 @@ private:
   rclcpp::Clock::SharedPtr clock_;
   rclcpp::Logger logger_ = rclcpp::get_logger("MPCController");
 
-
   std::string plugin_name_;
   std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
 
-  PathManager path_manager_;
   ParameterManager parameters_manager_;
-  QPProblemManager qp_problem_manager_;
   Parameters* params_;
 
-  Eigen::VectorXd X_init_;
-  Eigen::VectorXd X_ref_;
-
-  Eigen::MatrixXd A_;
-  Eigen::MatrixXd B_;
-  Eigen::MatrixXd C_;
-  
-  Eigen::MatrixXd A_stacked_;
-  Eigen::MatrixXd B_stacked_;
-
-  Eigen::MatrixXd stackMatrixA(
-    const Eigen::MatrixXd& A, 
-    const Eigen::MatrixXd& C);
-  
-  Eigen::MatrixXd stackMatrixB(
-    const Eigen::MatrixXd& A, 
-    const Eigen::MatrixXd& B, 
-    const Eigen::MatrixXd& C);
+  MPC mpc_;
 };
 
 } // namespace mpc_controller
