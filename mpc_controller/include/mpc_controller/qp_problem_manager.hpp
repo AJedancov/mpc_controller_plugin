@@ -19,10 +19,9 @@ public:
   Parameters* params);
 
   void update(
-  const Eigen::MatrixXd& A, 
-  const Eigen::MatrixXd& B,  
-  const Eigen::VectorXd& X_init, 
-  const Eigen::MatrixXd& X_ref);
+  const Eigen::MatrixXd& A,
+  const Eigen::MatrixXd& B,
+  const Eigen::VectorXd& state_error);
 
   void solve();
   Eigen::VectorXd getOptimalControl();

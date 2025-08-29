@@ -104,19 +104,20 @@ geometry_msgs::msg::Twist MPC::computeControl(){
   // ==================
   // === QP problem ===
   // ==================
-  qp_problem_manager_.update(A_stacked_, B_stacked_, X_init_, X_ref_);
+
+  Eigen::VectorXd X_free = propagateFreeDynamics(A_stacked_, X_init_);
+  Eigen::VectorXd state_error = X_free - X_ref_;
+
+  qp_problem_manager_.update(A_stacked_, B_stacked_, state_error);
   qp_problem_manager_.solve();
-
-  // Eigen::VectorXd X_pred(params_->prediction_horizon * params_->nx);
-  // X_pred << Ax_init + B_stacked_ * delta_u_optimal;
-  // path_manager_.publishOptimalTrajectory(X_pred);
-
-  // RCLCPP_INFO_STREAM(logger_, "Optimized state:\n" << X_pred);
-  // RCLCPP_INFO_STREAM(logger_, "State error:\n" << X_ref_ - X_pred);
   
   Eigen::VectorXd u_optimal(params_->prediction_horizon * params_->nu);
   u_optimal = qp_problem_manager_.getOptimalControl();
 
+  Eigen::VectorXd X_pred(params_->prediction_horizon * params_->nx);
+  X_pred << X_free + B_stacked_ * u_optimal;
+  path_manager_.publishOptimalTrajectory(X_pred);
+  
   double lin_vel = u_optimal[0];
   double ang_vel = u_optimal[1];
 
@@ -176,4 +177,18 @@ Eigen::MatrixXd MPC::stackMatrixB(
     }
   }
   return B_blk;
+}
+
+
+Eigen::VectorXd MPC::propagateFreeDynamics(
+  const Eigen::MatrixXd& A, 
+  const Eigen::VectorXd& X_init)
+{
+  Eigen::VectorXd X_k(A.rows());
+  X_k.setZero();
+  for(int predict_step = 0; predict_step < params_->prediction_horizon; predict_step++){
+    X_k.segment(predict_step * params_->ny, params_->nx) =
+      A.block(predict_step * params_->ny, 0, params_->ny, params_->nx) * X_init;
+  }
+  return X_k;
 }

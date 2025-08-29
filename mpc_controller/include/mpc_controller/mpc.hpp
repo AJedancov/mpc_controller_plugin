@@ -57,6 +57,10 @@ private:
     const Eigen::MatrixXd& A, 
     const Eigen::MatrixXd& B, 
     const Eigen::MatrixXd& C);
+
+  Eigen::VectorXd propagateFreeDynamics(
+    const Eigen::MatrixXd& A,
+    const Eigen::VectorXd& X_init);
 };
 
 

@@ -33,23 +33,15 @@ void QPProblemManager::configure(
 }
 
 void QPProblemManager::update(
-  const Eigen::MatrixXd& A, 
-  const Eigen::MatrixXd& B,  
-  const Eigen::VectorXd& X_init, 
-  const Eigen::MatrixXd& X_ref)
+  const Eigen::MatrixXd& A,
+  const Eigen::MatrixXd& B,
+  const Eigen::VectorXd& state_error)
 {
 
   // Prepare matrices for the QP problem of the form:
   // J = 0.5 * uHu^T + f^Tu
   // Subject to:
   // lower_bound <= Du <= upper_bound
-
-  Eigen::VectorXd AX_init(A.rows());
-  AX_init.setZero();
-  for(int predict_step = 0; predict_step < params_->prediction_horizon; predict_step++){
-    AX_init.segment(predict_step * params_->ny, params_->nx) =
-      A.block(predict_step * params_->ny, 0, params_->ny, params_->nx) * X_init;
-  }
 
   Q_blk_.setZero();
   R_blk_.setZero();
@@ -59,7 +51,7 @@ void QPProblemManager::update(
   }
 
   H_ = 2 * (B.transpose() * Q_blk_ * B + R_blk_);
-  f_ = 2 * B.transpose() * Q_blk_ * (AX_init - X_ref);
+  f_ = 2 * B.transpose() * Q_blk_ * state_error;
 
   int B_cols = B.cols();
   D_ << Eigen::MatrixXd::Identity(B_cols, B_cols);
