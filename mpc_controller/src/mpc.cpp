@@ -25,6 +25,9 @@ void MPC::configure(
   A_stacked_.resize(params_->prediction_horizon * params_->ny, params_->nx);
   B_stacked_.resize(params_->prediction_horizon * params_->ny, 
     params_->prediction_horizon * params_->nu);
+  
+  Q_.resize(params_->ny, params_->ny);
+  R_.resize(params_->nu, params_->nu);
 
   lower_bound_constraints_.resize(params_->nu);
   upper_bound_constraints_.resize(params_->nu);
@@ -67,6 +70,9 @@ void MPC::updateState(
   B_ << b11, 0,
         b21, 0,
         0, params_->dt;
+
+  Q_ << Eigen::MatrixXd::Identity(params_->ny, params_->ny) * 10;
+  R_ << Eigen::MatrixXd::Identity(params_->nu, params_->nu) * 0.1;
 
   lower_bound_constraints_ << params_->min_lin_vel, params_->min_ang_vel;
   upper_bound_constraints_ << params_->max_lin_vel, params_->max_ang_vel;
@@ -112,6 +118,9 @@ geometry_msgs::msg::Twist MPC::computeControl(){
   A_stacked_ = stackMatrixA(A_augmented, C_augmented);
   B_stacked_ = stackMatrixB(A_augmented, B_augmented, C_augmented);
 
+  Eigen::MatrixXd Q_stacked = stackWeightMatrix(Q_);
+  Eigen::MatrixXd R_stacked = stackWeightMatrix(R_);
+
   Eigen::VectorXd lower_bound_stacked = stackConstraints(lower_bound_constraints_);
   Eigen::VectorXd upper_bound_stacked = stackConstraints(upper_bound_constraints_);
   
@@ -126,6 +135,8 @@ geometry_msgs::msg::Twist MPC::computeControl(){
     A_stacked_, 
     B_stacked_, 
     state_error,
+    Q_stacked,
+    R_stacked,
     lower_bound_stacked - u_last_,
     upper_bound_stacked - u_last_);
   
@@ -225,4 +236,18 @@ Eigen::VectorXd MPC::stackConstraints(const Eigen::VectorXd& constraints){
     sonstraints_blk.segment(predict_step * constraints_rows, constraints_rows) << constraints;
   }
   return sonstraints_blk;
+}
+
+
+Eigen::MatrixXd MPC::stackWeightMatrix(const Eigen::MatrixXd& matrix){
+  int matrix_rows = matrix.rows();
+  int matrix_cols = matrix.cols();
+  Eigen::MatrixXd matrix_blk(params_->prediction_horizon * matrix_rows, params_->prediction_horizon * matrix_cols);
+  matrix_blk.setZero();
+  for(int predict_step = 0; predict_step < params_->prediction_horizon; predict_step++){
+    matrix_blk.block(
+      predict_step * matrix_rows, predict_step * matrix_cols, 
+      matrix_rows, matrix_cols) = matrix;
+  }
+  return matrix_blk;
 }

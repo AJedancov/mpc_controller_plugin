@@ -49,6 +49,9 @@ private:
   Eigen::MatrixXd A_stacked_;
   Eigen::MatrixXd B_stacked_;
 
+  Eigen::MatrixXd Q_;
+  Eigen::MatrixXd R_;
+
   Eigen::VectorXd lower_bound_constraints_;
   Eigen::VectorXd upper_bound_constraints_;
 
@@ -69,8 +72,7 @@ private:
     const Eigen::VectorXd& X_init);
 
   Eigen::VectorXd stackConstraints(const Eigen::VectorXd& sonstraints);
-  
+  Eigen::MatrixXd stackWeightMatrix(const Eigen::MatrixXd &matrix);
 };
 
-
-#endif  // SYSTEM_MODELS_HPP_
+#endif // SYSTEM_MODELS_HPP_

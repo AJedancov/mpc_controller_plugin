@@ -22,6 +22,8 @@ public:
   const Eigen::MatrixXd& A,
   const Eigen::MatrixXd& B,
   const Eigen::VectorXd& state_error, 
+  const Eigen::MatrixXd& Q,
+  const Eigen::MatrixXd& R,
   const Eigen::VectorXd& lower_bound,
   const Eigen::VectorXd& upper_bound);
 
@@ -41,9 +43,6 @@ private:
   // Weighting matrices
   Eigen::MatrixXd Q_;
   Eigen::MatrixXd R_;
-
-  Eigen::MatrixXd Q_blk_;
-  Eigen::MatrixXd R_blk_;
   
   // Constraints matrix
   Eigen::MatrixXd D_;
