@@ -19,7 +19,6 @@ public:
   Parameters* params);
 
   void update(
-  const Eigen::MatrixXd& A,
   const Eigen::MatrixXd& B,
   const Eigen::VectorXd& state_error, 
   const Eigen::MatrixXd& Q,
@@ -39,10 +38,6 @@ private:
 
   // Linear term
   Eigen::VectorXd f_;
-
-  // Weighting matrices
-  Eigen::MatrixXd Q_;
-  Eigen::MatrixXd R_;
   
   // Constraints matrix
   Eigen::MatrixXd D_;

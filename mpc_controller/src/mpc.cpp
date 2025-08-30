@@ -132,7 +132,6 @@ geometry_msgs::msg::Twist MPC::computeControl(){
   Eigen::VectorXd state_error = X_free - X_ref_;
 
   qp_problem_manager_.update(
-    A_stacked_, 
     B_stacked_, 
     state_error,
     Q_stacked,

@@ -19,7 +19,6 @@ void QPProblemManager::configure(
 }
 
 void QPProblemManager::update(
-  const Eigen::MatrixXd& A,
   const Eigen::MatrixXd& B,
   const Eigen::VectorXd& state_error, 
   const Eigen::MatrixXd& Q,
