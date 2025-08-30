@@ -21,10 +21,11 @@ public:
   void update(
   const Eigen::MatrixXd& A,
   const Eigen::MatrixXd& B,
-  const Eigen::VectorXd& state_error);
+  const Eigen::VectorXd& state_error, 
+  const Eigen::VectorXd& lower_bound,
+  const Eigen::VectorXd& upper_bound);
 
-  void solve();
-  Eigen::VectorXd getOptimalControl();
+  Eigen::VectorXd solve();
 
 private:
   rclcpp_lifecycle::LifecycleNode::SharedPtr node_;
@@ -44,13 +45,10 @@ private:
   Eigen::MatrixXd Q_blk_;
   Eigen::MatrixXd R_blk_;
   
-  // Constraints
+  // Constraints matrix
   Eigen::MatrixXd D_;
-  Eigen::VectorXd lower_bound_;
-  Eigen::VectorXd upper_bound_;
 
   Eigen::VectorXd u_optimal_;
-  Eigen::VectorXd u_last_;
 
   osqp::OSQPSolverWrapper osqp_solver_;
 

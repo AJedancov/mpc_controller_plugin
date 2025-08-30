@@ -25,6 +25,14 @@ void MPC::configure(
   A_stacked_.resize(params_->prediction_horizon * params_->ny, params_->nx);
   B_stacked_.resize(params_->prediction_horizon * params_->ny, 
     params_->prediction_horizon * params_->nu);
+
+  lower_bound_constraints_.resize(params_->nu);
+  upper_bound_constraints_.resize(params_->nu);
+
+  u_optimal_.resize(params_->prediction_horizon * params_->nu);
+
+  u_last_.resize(params_->prediction_horizon * params_->nu);
+  u_last_.setZero();
 }
 
 
@@ -59,6 +67,9 @@ void MPC::updateState(
   B_ << b11, 0,
         b21, 0,
         0, params_->dt;
+
+  lower_bound_constraints_ << params_->min_lin_vel, params_->min_ang_vel;
+  upper_bound_constraints_ << params_->max_lin_vel, params_->max_ang_vel;
 }
 
 
@@ -101,25 +112,37 @@ geometry_msgs::msg::Twist MPC::computeControl(){
   A_stacked_ = stackMatrixA(A_augmented, C_augmented);
   B_stacked_ = stackMatrixB(A_augmented, B_augmented, C_augmented);
 
+  Eigen::VectorXd lower_bound_stacked = stackConstraints(lower_bound_constraints_);
+  Eigen::VectorXd upper_bound_stacked = stackConstraints(upper_bound_constraints_);
+  
+
   // ==================
   // === QP problem ===
   // ==================
-
   Eigen::VectorXd X_free = propagateFreeDynamics(A_stacked_, X_init_);
   Eigen::VectorXd state_error = X_free - X_ref_;
 
-  qp_problem_manager_.update(A_stacked_, B_stacked_, state_error);
-  qp_problem_manager_.solve();
+  qp_problem_manager_.update(
+    A_stacked_, 
+    B_stacked_, 
+    state_error,
+    lower_bound_stacked - u_last_,
+    upper_bound_stacked - u_last_);
   
-  Eigen::VectorXd u_optimal(params_->prediction_horizon * params_->nu);
-  u_optimal = qp_problem_manager_.getOptimalControl();
+  Eigen::VectorXd delta_u_optimal(params_->prediction_horizon * params_->nu);
+  delta_u_optimal = qp_problem_manager_.solve();
+  
+  // To get current control from increment control: u_k = u_k-1 + delta_u
+  u_optimal_ << u_last_ + delta_u_optimal;
+  u_last_ = u_optimal_;
 
   Eigen::VectorXd X_pred(params_->prediction_horizon * params_->nx);
-  X_pred << X_free + B_stacked_ * u_optimal;
+  X_pred << X_free + B_stacked_ * u_optimal_;
   path_manager_.publishOptimalTrajectory(X_pred);
   
-  double lin_vel = u_optimal[0];
-  double ang_vel = u_optimal[1];
+  // Apply only first control input
+  double lin_vel = u_optimal_[0];
+  double ang_vel = u_optimal_[1];
 
   geometry_msgs::msg::Twist cmd_vel;
   cmd_vel.linear.x = lin_vel;
@@ -191,4 +214,15 @@ Eigen::VectorXd MPC::propagateFreeDynamics(
       A.block(predict_step * params_->ny, 0, params_->ny, params_->nx) * X_init;
   }
   return X_k;
+}
+
+
+Eigen::VectorXd MPC::stackConstraints(const Eigen::VectorXd& constraints){
+  int constraints_rows = constraints.rows();
+  Eigen::VectorXd sonstraints_blk(params_->prediction_horizon * constraints_rows);
+  sonstraints_blk.setZero();
+  for(int predict_step = 0; predict_step < params_->prediction_horizon; predict_step++){
+    sonstraints_blk.segment(predict_step * constraints_rows, constraints_rows) << constraints;
+  }
+  return sonstraints_blk;
 }

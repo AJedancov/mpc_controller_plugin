@@ -49,6 +49,12 @@ private:
   Eigen::MatrixXd A_stacked_;
   Eigen::MatrixXd B_stacked_;
 
+  Eigen::VectorXd lower_bound_constraints_;
+  Eigen::VectorXd upper_bound_constraints_;
+
+  Eigen::VectorXd u_optimal_;
+  Eigen::VectorXd u_last_;
+
   Eigen::MatrixXd stackMatrixA(
     const Eigen::MatrixXd& A, 
     const Eigen::MatrixXd& C);
@@ -61,6 +67,9 @@ private:
   Eigen::VectorXd propagateFreeDynamics(
     const Eigen::MatrixXd& A,
     const Eigen::VectorXd& X_init);
+
+  Eigen::VectorXd stackConstraints(const Eigen::VectorXd& sonstraints);
+  
 };
 
 
