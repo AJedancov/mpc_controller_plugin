@@ -81,42 +81,51 @@ void MPC::updateState(
 
 geometry_msgs::msg::Twist MPC::computeControl(){
 
-  // === Input increment model ===
-  // [x_k+1] = [A B]*[x_k  ]+[B]*delta_u
-  // [u_k]     [0 I] [u_k-1] [I]
-  // 
-  // y_k = [C 0]*[x_k  ]
-  //             [u_K-1] 
+  Eigen::MatrixXd A = A_;
+  Eigen::MatrixXd B = B_;
+  Eigen::MatrixXd C = C_;
 
-  int A_rows_number = A_.rows();
-  int A_cols_number = A_.cols();
-  int B_rows_number = B_.rows();
-  int B_cols_number = B_.cols();
-  Eigen::MatrixXd A_augmented(A_rows_number + B_cols_number, A_cols_number + B_cols_number);
-  A_augmented.setZero();
-  A_augmented.block(0, 0, A_rows_number, A_cols_number) = A_;
-  A_augmented.block(0, A_cols_number, B_rows_number, B_cols_number) = B_;
-  A_augmented.block(A_rows_number, A_cols_number, B_cols_number, B_cols_number) =
-    Eigen::MatrixXd::Identity(B_cols_number, B_cols_number);
+  if(params_->use_input_increment){
+    // === Input increment model ===
+    // [x_k+1] = [A B]*[x_k  ]+[B]*delta_u
+    // [u_k]     [0 I] [u_k-1] [I]
+    // 
+    // y_k = [C 0]*[x_k  ]
+    //             [u_K-1] 
 
-  Eigen::MatrixXd B_augmented(B_rows_number + B_cols_number, B_cols_number);
-  B_augmented.setZero();
-  B_augmented.block(0, 0, B_rows_number, B_cols_number) = B_;
-  B_augmented.block(B_rows_number, 0, B_cols_number, B_cols_number) =
-    Eigen::MatrixXd::Identity(B_cols_number, B_cols_number);
+    int A_rows_number = A_.rows();
+    int A_cols_number = A_.cols();
+    int B_rows_number = B_.rows();
+    int B_cols_number = B_.cols();
+    Eigen::MatrixXd A_augmented(A_rows_number + B_cols_number, A_cols_number + B_cols_number);
+    A_augmented.setZero();
+    A_augmented.block(0, 0, A_rows_number, A_cols_number) = A_;
+    A_augmented.block(0, A_cols_number, B_rows_number, B_cols_number) = B_;
+    A_augmented.block(A_rows_number, A_cols_number, B_cols_number, B_cols_number) =
+      Eigen::MatrixXd::Identity(B_cols_number, B_cols_number);
 
-  int C_rows_number = C_.rows();
-  int C_cols_number = C_.cols();
-  Eigen::MatrixXd C_augmented(C_rows_number, C_cols_number + B_cols_number);
-  C_augmented.setZero();
-  C_augmented.block(0, 0, C_rows_number, C_cols_number) = C_;
+    Eigen::MatrixXd B_augmented(B_rows_number + B_cols_number, B_cols_number);
+    B_augmented.setZero();
+    B_augmented.block(0, 0, B_rows_number, B_cols_number) = B_;
+    B_augmented.block(B_rows_number, 0, B_cols_number, B_cols_number) =
+      Eigen::MatrixXd::Identity(B_cols_number, B_cols_number);
 
+    int C_rows_number = C_.rows();
+    int C_cols_number = C_.cols();
+    Eigen::MatrixXd C_augmented(C_rows_number, C_cols_number + B_cols_number);
+    C_augmented.setZero();
+    C_augmented.block(0, 0, C_rows_number, C_cols_number) = C_;
+
+    A = A_augmented;
+    B = B_augmented;
+    C = C_augmented;
+  }
 
   // =======================
   // === System stacking ===
   // =======================
-  A_stacked_ = stackMatrixA(A_augmented, C_augmented);
-  B_stacked_ = stackMatrixB(A_augmented, B_augmented, C_augmented);
+  A_stacked_ = stackMatrixA(A, C);
+  B_stacked_ = stackMatrixB(A, B, C);
 
   Eigen::MatrixXd Q_stacked = stackWeightMatrix(Q_);
   Eigen::MatrixXd R_stacked = stackWeightMatrix(R_);
@@ -124,6 +133,10 @@ geometry_msgs::msg::Twist MPC::computeControl(){
   Eigen::VectorXd lower_bound_stacked = lower_bound_constraints_.replicate(params_->prediction_horizon, 1);
   Eigen::VectorXd upper_bound_stacked = upper_bound_constraints_.replicate(params_->prediction_horizon, 1);
   
+  if(params_->use_input_increment){
+    lower_bound_stacked -= u_last_;
+    upper_bound_stacked -= u_last_;
+  }
 
   // ==================
   // === QP problem ===
@@ -136,15 +149,19 @@ geometry_msgs::msg::Twist MPC::computeControl(){
     state_error,
     Q_stacked,
     R_stacked,
-    lower_bound_stacked - u_last_,
-    upper_bound_stacked - u_last_);
+    lower_bound_stacked,
+    upper_bound_stacked);
   
-  Eigen::VectorXd delta_u_optimal(params_->prediction_horizon * params_->nu);
-  delta_u_optimal = qp_problem_manager_.solve();
+  Eigen::VectorXd qp_optimal_solution = qp_problem_manager_.solve();
   
-  // To get current control from increment control: u_k = u_k-1 + delta_u
-  u_optimal_ << u_last_ + delta_u_optimal;
-  u_last_ = u_optimal_;
+  if(params_->use_input_increment){
+    // To get current control u_k from control increment delta_u: u_k = u_k-1 + delta_u
+    u_optimal_ << u_last_ + qp_optimal_solution;
+    u_last_ = u_optimal_;
+  }
+  else{
+    u_optimal_ = qp_optimal_solution;
+  }
 
   Eigen::VectorXd X_pred(params_->prediction_horizon * params_->nx);
   X_pred << X_free + B_stacked_ * u_optimal_;

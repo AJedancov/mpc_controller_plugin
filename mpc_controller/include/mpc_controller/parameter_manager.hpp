@@ -18,6 +18,7 @@ struct Parameters{
   int nx = 0;
   int nu = 0;
   int ny = 0;
+  bool use_input_increment = true;
 };
 
 
@@ -46,6 +47,7 @@ public:
     node_->declare_parameter(plugin_name_ + ".nx", rclcpp::ParameterValue(3));
     node_->declare_parameter(plugin_name_ + ".nu", rclcpp::ParameterValue(2));
     node_->declare_parameter(plugin_name_ + ".ny", rclcpp::ParameterValue(3));
+    node_->declare_parameter(plugin_name_ + ".use_input_increment", rclcpp::ParameterValue(false));
 
     node_->get_parameter(plugin_name_ + ".dt", params_.dt);
     node_->get_parameter(plugin_name_ + ".max_lin_vel", params_.max_lin_vel);
@@ -56,6 +58,7 @@ public:
     node_->get_parameter(plugin_name_ + ".nx", params_.nx);
     node_->get_parameter(plugin_name_ + ".nu", params_.nu);
     node_->get_parameter(plugin_name_ + ".ny", params_.ny);
+    node_->get_parameter(plugin_name_ + ".use_input_increment", params_.use_input_increment);
   }
 
   Parameters* get_parameters(){
@@ -82,6 +85,7 @@ private:
     node_->get_parameter(plugin_name_ + ".nx", params_.nx);
     node_->get_parameter(plugin_name_ + ".nu", params_.nu);
     node_->get_parameter(plugin_name_ + ".ny", params_.ny);
+    node_->get_parameter(plugin_name_ + ".use_input_increment", params_.use_input_increment);
 
     rcl_interfaces::msg::SetParametersResult result;
     result.successful = true;
