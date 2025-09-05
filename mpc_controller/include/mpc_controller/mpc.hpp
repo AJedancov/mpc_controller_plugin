@@ -71,7 +71,6 @@ private:
     const Eigen::MatrixXd& A,
     const Eigen::VectorXd& X_init);
 
-  Eigen::VectorXd stackConstraints(const Eigen::VectorXd& sonstraints);
   Eigen::MatrixXd stackWeightMatrix(const Eigen::MatrixXd &matrix);
 };
 

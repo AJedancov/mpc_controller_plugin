@@ -121,8 +121,8 @@ geometry_msgs::msg::Twist MPC::computeControl(){
   Eigen::MatrixXd Q_stacked = stackWeightMatrix(Q_);
   Eigen::MatrixXd R_stacked = stackWeightMatrix(R_);
 
-  Eigen::VectorXd lower_bound_stacked = stackConstraints(lower_bound_constraints_);
-  Eigen::VectorXd upper_bound_stacked = stackConstraints(upper_bound_constraints_);
+  Eigen::VectorXd lower_bound_stacked = lower_bound_constraints_.replicate(params_->prediction_horizon, 1);
+  Eigen::VectorXd upper_bound_stacked = upper_bound_constraints_.replicate(params_->prediction_horizon, 1);
   
 
   // ==================
@@ -224,17 +224,6 @@ Eigen::VectorXd MPC::propagateFreeDynamics(
       A.block(predict_step * params_->ny, 0, params_->ny, params_->nx) * X_init;
   }
   return X_k;
-}
-
-
-Eigen::VectorXd MPC::stackConstraints(const Eigen::VectorXd& constraints){
-  int constraints_rows = constraints.rows();
-  Eigen::VectorXd sonstraints_blk(params_->prediction_horizon * constraints_rows);
-  sonstraints_blk.setZero();
-  for(int predict_step = 0; predict_step < params_->prediction_horizon; predict_step++){
-    sonstraints_blk.segment(predict_step * constraints_rows, constraints_rows) << constraints;
-  }
-  return sonstraints_blk;
 }
 
 
