@@ -175,10 +175,8 @@ Eigen::MatrixXd MPC::stackMatrixA(
   Eigen::MatrixXd A_blk(params_->prediction_horizon * C_rows_number, A_cols_number);
   A_blk.setZero();
   for(int predict_step = 0; predict_step < params_->prediction_horizon; predict_step++){
-      if(predict_step){
-        A_pow *= A;
-      }
-    A_blk.block(predict_step * C_rows_number, 0, C_rows_number, A_cols_number) = C * A_pow;
+      A_blk.block(predict_step * C_rows_number, 0, C_rows_number, A_cols_number) = C * A_pow;
+      A_pow *= A;
   }
   return A_blk;
 }
@@ -202,11 +200,9 @@ Eigen::MatrixXd MPC::stackMatrixB(
   for(int state_step = 0; state_step < params_->prediction_horizon; state_step++){
     A_pow << Eigen::MatrixXd::Identity(A_pow.rows(), A_pow.cols());
     for(int predict_step = 0; predict_step < params_->prediction_horizon - state_step; predict_step++){
-      if(predict_step){
-        A_pow *= A;
-      }
       B_blk.block((predict_step + state_step) * C_rows_number, state_step * B_cols_number,
-        C_rows_number, B_cols_number) = C * A_pow * B;
+      C_rows_number, B_cols_number) = C * A_pow * B;
+      A_pow *= A;
     }
   }
   return B_blk;
