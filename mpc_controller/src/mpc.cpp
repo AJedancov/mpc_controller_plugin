@@ -84,6 +84,7 @@ geometry_msgs::msg::Twist MPC::computeControl(){
   Eigen::MatrixXd A = A_;
   Eigen::MatrixXd B = B_;
   Eigen::MatrixXd C = C_;
+  Eigen::VectorXd X_init = X_init_;
 
   if(params_->use_input_increment){
     // === Input increment model ===
@@ -116,9 +117,14 @@ geometry_msgs::msg::Twist MPC::computeControl(){
     C_augmented.setZero();
     C_augmented.block(0, 0, C_rows_number, C_cols_number) = C_;
 
+    Eigen::VectorXd X_augmented(params_->nx + params_->nu);
+    X_augmented.segment(0, params_->nx) = X_init_;
+    X_augmented.segment(params_->nx, params_->nu) << u_last_[0], u_last_[1];
+
     A = A_augmented;
     B = B_augmented;
     C = C_augmented;
+    X_init = X_augmented;
   }
 
   // =======================
@@ -141,8 +147,8 @@ geometry_msgs::msg::Twist MPC::computeControl(){
   // ==================
   // === QP problem ===
   // ==================
-  Eigen::VectorXd X_free = propagateFreeDynamics(A_stacked_, X_init_);
-  Eigen::VectorXd state_error = X_free - X_ref_;
+  Eigen::VectorXd Y_free = A_stacked_ * X_init;
+  Eigen::VectorXd state_error = Y_free - X_ref_;
 
   qp_problem_manager_.update(
     B_stacked_, 
@@ -156,7 +162,7 @@ geometry_msgs::msg::Twist MPC::computeControl(){
   
   if(params_->use_input_increment){
     // To get current control u_k from control increment delta_u: u_k = u_k-1 + delta_u
-    u_optimal_ << u_last_ + qp_optimal_solution;
+    u_optimal_ = u_last_ + qp_optimal_solution;
     u_last_ = u_optimal_;
   }
   else{
@@ -164,7 +170,7 @@ geometry_msgs::msg::Twist MPC::computeControl(){
   }
 
   Eigen::VectorXd X_pred(params_->prediction_horizon * params_->nx);
-  X_pred << X_free + B_stacked_ * u_optimal_;
+  X_pred = Y_free + B_stacked_ * u_optimal_;
   path_manager_.publishOptimalTrajectory(X_pred);
   
   // Apply only first control input
@@ -223,20 +229,6 @@ Eigen::MatrixXd MPC::stackMatrixB(
     }
   }
   return B_blk;
-}
-
-
-Eigen::VectorXd MPC::propagateFreeDynamics(
-  const Eigen::MatrixXd& A, 
-  const Eigen::VectorXd& X_init)
-{
-  Eigen::VectorXd X_k(A.rows());
-  X_k.setZero();
-  for(int predict_step = 0; predict_step < params_->prediction_horizon; predict_step++){
-    X_k.segment(predict_step * params_->ny, params_->nx) =
-      A.block(predict_step * params_->ny, 0, params_->ny, params_->nx) * X_init;
-  }
-  return X_k;
 }
 
 
