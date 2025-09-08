@@ -22,7 +22,7 @@ public:
     rclcpp_lifecycle::LifecycleNode::WeakPtr parent, 
     Parameters* params);
 
-  void setGlobalPath(const nav_msgs::msg::Path& path);
+  void setReferencePath(const Eigen::VectorXd& path);
 
   void updateState(
     const geometry_msgs::msg::PoseStamped& robot_pose,
@@ -30,17 +30,18 @@ public:
   
   geometry_msgs::msg::Twist computeControl();
 
+  Eigen::VectorXd getOptimalTrajectory();
   
 private:
   rclcpp_lifecycle::LifecycleNode::SharedPtr node_;
   rclcpp::Clock::SharedPtr clock_;
   Parameters* params_;
 
-  PathManager path_manager_;
   QPProblemManager qp_problem_manager_;
 
   Eigen::VectorXd X_init_;
   Eigen::VectorXd X_ref_;
+  Eigen::VectorXd X_pred_;
 
   Eigen::MatrixXd A_;
   Eigen::MatrixXd B_;

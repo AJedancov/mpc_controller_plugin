@@ -10,11 +10,11 @@ void MPC::configure(
   clock_ = node_->get_clock();
   params_ = params;
 
-  path_manager_.configure(parent, params_);
   qp_problem_manager_.configure(parent, params_);
 
   X_init_.resize(params_->nx);
   X_ref_.resize(params_->prediction_horizon * params_->nx);
+  X_pred_.resize(params_->prediction_horizon * params_->nx);
 
   // Set matrix dimensions
   A_.resize(params_->nx, params_->nx);
@@ -39,8 +39,8 @@ void MPC::configure(
 }
 
 
-void MPC::setGlobalPath(const nav_msgs::msg::Path& path){
-  path_manager_.setGlobalPath(path);
+void MPC::setReferencePath(const Eigen::VectorXd& X_ref){
+  X_ref_ = X_ref;
 }
 
 
@@ -48,7 +48,6 @@ void MPC::updateState(
   const geometry_msgs::msg::PoseStamped& robot_pose,
   const geometry_msgs::msg::Twist& robot_velocity)
 {
-  X_ref_ = path_manager_.computeReferencePath(robot_pose);
 
   double yaw = tf2::getYaw(robot_pose.pose.orientation);
   X_init_ << robot_pose.pose.position.x,
@@ -171,9 +170,7 @@ geometry_msgs::msg::Twist MPC::computeControl(){
     u_optimal_ = qp_optimal_solution;
   }
 
-  Eigen::VectorXd X_pred(params_->prediction_horizon * params_->nx);
-  X_pred = Y_free + B_stacked_ * u_optimal_;
-  path_manager_.publishOptimalTrajectory(X_pred);
+  X_pred_ = Y_free + B_stacked_ * u_optimal_;
   
   // Apply only first control input
   double lin_vel = u_optimal_[0];
@@ -245,4 +242,9 @@ Eigen::MatrixXd MPC::stackWeightMatrix(const Eigen::MatrixXd& matrix){
       matrix_rows, matrix_cols) = matrix;
   }
   return matrix_blk;
+}
+
+
+Eigen::VectorXd MPC::getOptimalTrajectory(){
+  return X_pred_;
 }

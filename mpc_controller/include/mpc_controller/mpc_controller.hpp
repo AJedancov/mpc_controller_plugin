@@ -5,6 +5,7 @@
 #include "pluginlib/class_list_macros.hpp"
 
 #include "mpc_controller/parameter_manager.hpp"
+#include "mpc_controller/path_manager.hpp"
 #include "mpc_controller/mpc.hpp"
 #include <Eigen/Core>
 
@@ -50,7 +51,7 @@ private:
 
   ParameterManager parameters_manager_;
   Parameters* params_;
-
+  PathManager path_manager_;
   MPC mpc_;
 };
 

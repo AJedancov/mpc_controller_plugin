@@ -20,7 +20,7 @@ void MPCController::configure(
   
   parameters_manager_.configure(parent, name);
   params_ = parameters_manager_.get_parameters();
-
+  path_manager_.configure(parent, params_);
   mpc_.configure(parent, params_);
 }
 
@@ -36,7 +36,7 @@ void MPCController::setSpeedLimit(const double &speed_limit, const bool &percent
 }
 
 void MPCController::setPlan(const nav_msgs::msg::Path& path){
-  mpc_.setGlobalPath(path);
+  path_manager_.setGlobalPath(path);
 }
 
 geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
@@ -46,11 +46,16 @@ geometry_msgs::msg::TwistStamped MPCController::computeVelocityCommands(
 {
   (void) goal_checker;
 
+  Eigen::VectorXd X_ref = path_manager_.computeReferencePath(robot_pose);
+  mpc_.setReferencePath(X_ref);
   mpc_.updateState(robot_pose, robot_velocity);
 
   geometry_msgs::msg::TwistStamped cmd_vel;
   cmd_vel.header = robot_pose.header;
   cmd_vel.twist = mpc_.computeControl();
+
+  Eigen::VectorXd optimal_trajectory = mpc_.getOptimalTrajectory();
+  path_manager_.publishOptimalTrajectory(optimal_trajectory);
 
   return cmd_vel;
 }
