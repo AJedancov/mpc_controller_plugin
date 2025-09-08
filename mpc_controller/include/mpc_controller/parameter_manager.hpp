@@ -19,6 +19,8 @@ struct Parameters{
   int nu = 0;
   int ny = 0;
   bool use_input_increment = true;
+  std::vector<double> state_weights_diag;
+  std::vector<double> control_weights_diag;
 };
 
 
@@ -48,6 +50,8 @@ public:
     node_->declare_parameter(plugin_name_ + ".nu", rclcpp::ParameterValue(2));
     node_->declare_parameter(plugin_name_ + ".ny", rclcpp::ParameterValue(3));
     node_->declare_parameter(plugin_name_ + ".use_input_increment", rclcpp::ParameterValue(false));
+    node_->declare_parameter(plugin_name_ + ".state_weights_diag", rclcpp::ParameterValue(state_weights_diag));
+    node_->declare_parameter(plugin_name_ + ".control_weights_diag", rclcpp::ParameterValue(control_weights_diag));
 
     node_->get_parameter(plugin_name_ + ".dt", params_.dt);
     node_->get_parameter(plugin_name_ + ".max_lin_vel", params_.max_lin_vel);
@@ -59,6 +63,8 @@ public:
     node_->get_parameter(plugin_name_ + ".nu", params_.nu);
     node_->get_parameter(plugin_name_ + ".ny", params_.ny);
     node_->get_parameter(plugin_name_ + ".use_input_increment", params_.use_input_increment);
+    node_->get_parameter(plugin_name_ + ".state_weights_diag", params_.state_weights_diag);
+    node_->get_parameter(plugin_name_ + ".control_weights_diag", params_.control_weights_diag);
   }
 
   Parameters* get_parameters(){
@@ -69,6 +75,8 @@ private:
   rclcpp_lifecycle::LifecycleNode::SharedPtr node_;
   std::string plugin_name_;
   Parameters params_;
+  std::vector<double> state_weights_diag{10, 10, 10};
+  std::vector<double> control_weights_diag{0.1, 0.1};
   
   rclcpp::node_interfaces::PostSetParametersCallbackHandle::SharedPtr params_callback_handle_;
 
@@ -86,6 +94,8 @@ private:
     node_->get_parameter(plugin_name_ + ".nu", params_.nu);
     node_->get_parameter(plugin_name_ + ".ny", params_.ny);
     node_->get_parameter(plugin_name_ + ".use_input_increment", params_.use_input_increment);
+    node_->get_parameter(plugin_name_ + ".state_weights_diag", params_.state_weights_diag);
+    node_->get_parameter(plugin_name_ + ".control_weights_diag", params_.control_weights_diag);
 
     rcl_interfaces::msg::SetParametersResult result;
     result.successful = true;

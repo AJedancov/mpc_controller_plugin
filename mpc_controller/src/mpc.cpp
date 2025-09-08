@@ -70,9 +70,11 @@ void MPC::updateState(
   B_ << b11, 0,
         b21, 0,
         0, params_->dt;
-
-  Q_ << Eigen::MatrixXd::Identity(params_->ny, params_->ny) * 10;
-  R_ << Eigen::MatrixXd::Identity(params_->nu, params_->nu) * 0.1;
+        
+  std::vector<double> q = params_->state_weights_diag;
+  std::vector<double> r = params_->control_weights_diag;
+  Q_ = Eigen::Map<Eigen::VectorXd>(q.data(), q.size()).asDiagonal();
+  R_ = Eigen::Map<Eigen::VectorXd>(r.data(), r.size()).asDiagonal();
 
   lower_bound_constraints_ << params_->min_lin_vel, params_->min_ang_vel;
   upper_bound_constraints_ << params_->max_lin_vel, params_->max_ang_vel;
