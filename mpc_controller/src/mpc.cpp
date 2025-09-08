@@ -141,12 +141,11 @@ geometry_msgs::msg::Twist MPC::computeControl(){
     lower_bound_stacked -= u_last_;
     upper_bound_stacked -= u_last_;
   }
-
+ 
   // ==================
   // === QP problem ===
   // ==================
-  Eigen::VectorXd Y_free = A_stacked_ * X_init_;
-  Eigen::VectorXd state_error = Y_free - X_ref_;
+  Eigen::VectorXd state_error = A_stacked_ * X_init_ - X_ref_;
 
   qp_problem_manager_.update(
     B_stacked_, 
@@ -167,7 +166,7 @@ geometry_msgs::msg::Twist MPC::computeControl(){
     u_optimal_ = qp_optimal_solution;
   }
 
-  X_pred_ = Y_free + B_stacked_ * u_optimal_;
+  X_pred_ = propagateSystemState(A_stacked_, B_stacked_, X_init_, u_optimal_);
 
   // Apply only first control input
   double lin_vel = u_optimal_[0];
@@ -239,6 +238,16 @@ Eigen::MatrixXd MPC::stackWeightMatrix(const Eigen::MatrixXd& matrix){
       matrix_rows, matrix_cols) = matrix;
   }
   return matrix_blk;
+}
+
+
+Eigen::VectorXd MPC::propagateSystemState(
+  const Eigen::MatrixXd& A,
+  const Eigen::MatrixXd& B,
+  const Eigen::VectorXd& x,
+  const Eigen::VectorXd& u)
+{
+  return A * x + B * u;
 }
 
 

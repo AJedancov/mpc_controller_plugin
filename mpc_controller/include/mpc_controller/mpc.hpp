@@ -69,6 +69,12 @@ private:
     const Eigen::MatrixXd& C);
 
   Eigen::MatrixXd stackWeightMatrix(const Eigen::MatrixXd &matrix);
+
+  Eigen::VectorXd propagateSystemState(
+    const Eigen::MatrixXd& A,
+    const Eigen::MatrixXd& B,
+    const Eigen::VectorXd& x,
+    const Eigen::VectorXd& u);
 };
 
 #endif // SYSTEM_MODELS_HPP_
