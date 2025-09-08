@@ -20,7 +20,6 @@ void MPC::configure(
   A_.resize(params_->nx, params_->nx);
   B_.resize(params_->nx, params_->nu);
   C_.resize(params_->ny, params_->nx);
-  C_ << Eigen::MatrixXd::Identity(params_->ny, params_->nx);
 
   A_stacked_.resize(params_->prediction_horizon * params_->ny, params_->nx);
   B_stacked_.resize(params_->prediction_horizon * params_->ny, 
@@ -49,27 +48,30 @@ void MPC::updateState(
   const geometry_msgs::msg::Twist& robot_velocity)
 {
 
+  X_init_.resize(params_->nx);
   double yaw = tf2::getYaw(robot_pose.pose.orientation);
   X_init_ << robot_pose.pose.position.x,
              robot_pose.pose.position.y,
              yaw;
 
   // Define system dynamic
+  A_.resize(params_->nx, params_->nx);
   double linear_vel = robot_velocity.linear.x;
   double a13 = -linear_vel * std::sin(yaw) * params_->dt;
   double a23 = linear_vel * std::cos(yaw) * params_->dt;
-
   A_ << 1, 0, a13,
         0, 1, a23,
         0, 0, 1;
 
+  B_.resize(params_->nx, params_->nu);
   double b11 = std::cos(yaw) * params_->dt;
   double b21 = std::sin(yaw) * params_->dt;
-
   B_ << b11, 0,
         b21, 0,
         0, params_->dt;
-        
+  
+  C_.setIdentity(params_->ny, params_->nx);
+
   std::vector<double> q = params_->state_weights_diag;
   std::vector<double> r = params_->control_weights_diag;
   Q_ = Eigen::Map<Eigen::VectorXd>(q.data(), q.size()).asDiagonal();
@@ -77,15 +79,6 @@ void MPC::updateState(
 
   lower_bound_constraints_ << params_->min_lin_vel, params_->min_ang_vel;
   upper_bound_constraints_ << params_->max_lin_vel, params_->max_ang_vel;
-}
-
-
-geometry_msgs::msg::Twist MPC::computeControl(){
-
-  Eigen::MatrixXd A = A_;
-  Eigen::MatrixXd B = B_;
-  Eigen::MatrixXd C = C_;
-  Eigen::VectorXd X_init = X_init_;
 
   if(params_->use_input_increment){
     // === Input increment model ===
@@ -122,17 +115,21 @@ geometry_msgs::msg::Twist MPC::computeControl(){
     X_augmented.segment(0, params_->nx) = X_init_;
     X_augmented.segment(params_->nx, params_->nu) << u_last_[0], u_last_[1];
 
-    A = A_augmented;
-    B = B_augmented;
-    C = C_augmented;
-    X_init = X_augmented;
+    A_ = A_augmented;
+    B_ = B_augmented;
+    C_ = C_augmented;
+    X_init_ = X_augmented;
   }
+}
+
+
+geometry_msgs::msg::Twist MPC::computeControl(){
 
   // =======================
   // === System stacking ===
   // =======================
-  A_stacked_ = stackMatrixA(A, C);
-  B_stacked_ = stackMatrixB(A, B, C);
+  A_stacked_ = stackMatrixA(A_, C_);
+  B_stacked_ = stackMatrixB(A_, B_, C_);
 
   Eigen::MatrixXd Q_stacked = stackWeightMatrix(Q_);
   Eigen::MatrixXd R_stacked = stackWeightMatrix(R_);
@@ -148,7 +145,7 @@ geometry_msgs::msg::Twist MPC::computeControl(){
   // ==================
   // === QP problem ===
   // ==================
-  Eigen::VectorXd Y_free = A_stacked_ * X_init;
+  Eigen::VectorXd Y_free = A_stacked_ * X_init_;
   Eigen::VectorXd state_error = Y_free - X_ref_;
 
   qp_problem_manager_.update(
@@ -171,7 +168,7 @@ geometry_msgs::msg::Twist MPC::computeControl(){
   }
 
   X_pred_ = Y_free + B_stacked_ * u_optimal_;
-  
+
   // Apply only first control input
   double lin_vel = u_optimal_[0];
   double ang_vel = u_optimal_[1];
