@@ -12,7 +12,11 @@ namespace osqp
 {
 
 struct OSQPCscMatrixHolder{
-  std::unique_ptr<OSQPCscMatrix> matrix_ptr_ = std::make_unique<OSQPCscMatrix>();
+  ~OSQPCscMatrixHolder(){
+    OSQPCscMatrix_free(matrix_ptr_);
+  }
+
+  OSQPCscMatrix* matrix_ptr_ = nullptr;
   std::vector<OSQPInt> pointers_;
   std::vector<OSQPInt> indices_;
   std::vector<OSQPFloat> values_;
@@ -21,6 +25,7 @@ struct OSQPCscMatrixHolder{
 class OSQPSolverWrapper {
 public:
   OSQPSolverWrapper();
+  ~OSQPSolverWrapper();
 
   void setup(
     Eigen::MatrixXd& H, const Eigen::VectorXd& f,
@@ -30,19 +35,16 @@ public:
 
 private:
   OSQPSolver* osqp_solver_;
+  OSQPSettings* settings_;
 
+  OSQPCscMatrix* H_osqp_csc_;
   const OSQPFloat* f_osqp_;
+
+  OSQPCscMatrix* D_osqp_csc_;
   const OSQPFloat* lb_osqp_;
   const OSQPFloat* ub_osqp_;
   OSQPInt number_constraints_;
   OSQPInt number_variables_;
-  OSQPSettings* settings_;
-
-  OSQPCscMatrixHolder H_osqp_csc_;
-  OSQPCscMatrixHolder D_osqp_csc_;
-  
-  void convertToOSQPCscMatrix(Eigen::MatrixXd& M, OSQPCscMatrixHolder& M_osqp_csc);
-
 };
 
 } // namespace osqp
