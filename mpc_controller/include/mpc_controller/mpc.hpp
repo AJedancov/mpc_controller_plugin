@@ -5,7 +5,7 @@
 #include "geometry_msgs/msg/twist.hpp"
 
 #include "mpc_controller/path_manager.hpp"
-#include "mpc_controller/qp_problem_manager.hpp"
+#include "mpc_controller/qp_problem.hpp"
 #include "mpc_controller/parameter_manager.hpp"
 #include <Eigen/Core>
 
@@ -37,7 +37,7 @@ private:
   rclcpp::Clock::SharedPtr clock_;
   Parameters* params_;
 
-  QPProblemManager qp_problem_manager_;
+  QPProblem qp_problem_;
 
   Eigen::VectorXd X_init_;
   Eigen::VectorXd X_ref_;

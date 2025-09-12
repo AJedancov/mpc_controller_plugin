@@ -6,25 +6,25 @@
 #include <Eigen/Core>
 
 
-#ifndef QP_PROBLEM_MANAGER_HPP_
-#define QP_PROBLEM_MANAGER_HPP_
+#ifndef QP_PROBLEM_HPP_
+#define QP_PROBLEM_HPP_
 
 
-class QPProblemManager{
+class QPProblem{
 public:
-  QPProblemManager();
+  QPProblem();
 
   void configure(
-  rclcpp_lifecycle::LifecycleNode::WeakPtr parent,
-  Parameters* params);
+    rclcpp_lifecycle::LifecycleNode::WeakPtr parent,
+    Parameters* params);
 
   void update(
-  const Eigen::MatrixXd& B,
-  const Eigen::VectorXd& state_error, 
-  const Eigen::MatrixXd& Q,
-  const Eigen::MatrixXd& R,
-  const Eigen::VectorXd& lower_bound,
-  const Eigen::VectorXd& upper_bound);
+    const Eigen::MatrixXd& B,
+    const Eigen::VectorXd& state_error, 
+    const Eigen::MatrixXd& Q,
+    const Eigen::MatrixXd& R,
+    const Eigen::VectorXd& lower_bound,
+    const Eigen::VectorXd& upper_bound);
 
   Eigen::VectorXd solve();
 
@@ -47,4 +47,4 @@ private:
   osqp::OSQPSolverWrapper osqp_solver_;
 
 };
-#endif  //QP_PROBLEM_MANAGER_HPP_
+#endif  //QP_PROBLEM_HPP_

@@ -10,7 +10,7 @@ void MPC::configure(
   clock_ = node_->get_clock();
   params_ = params;
 
-  qp_problem_manager_.configure(parent, params_);
+  qp_problem_.configure(parent, params_);
 
   X_init_.resize(params_->nx);
   X_ref_.resize(params_->prediction_horizon * params_->nx);
@@ -147,7 +147,7 @@ geometry_msgs::msg::Twist MPC::computeControl(){
   // ==================
   Eigen::VectorXd state_error = A_stacked_ * X_init_ - X_ref_;
 
-  qp_problem_manager_.update(
+  qp_problem_.update(
     B_stacked_, 
     state_error,
     Q_stacked,
@@ -155,7 +155,7 @@ geometry_msgs::msg::Twist MPC::computeControl(){
     lower_bound_stacked,
     upper_bound_stacked);
   
-  Eigen::VectorXd qp_optimal_solution = qp_problem_manager_.solve();
+  Eigen::VectorXd qp_optimal_solution = qp_problem_.solve();
   
   if(params_->use_input_increment){
     // To get current control u_k from control increment delta_u: u_k = u_k-1 + delta_u

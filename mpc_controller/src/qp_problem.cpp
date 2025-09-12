@@ -1,9 +1,9 @@
-#include "mpc_controller/qp_problem_manager.hpp"
+#include "mpc_controller/qp_problem.hpp"
 
-QPProblemManager::QPProblemManager(){}
+QPProblem::QPProblem(){}
 
 
-void QPProblemManager::configure(
+void QPProblem::configure(
   rclcpp_lifecycle::LifecycleNode::WeakPtr parent, 
   Parameters *params)
 {
@@ -18,7 +18,7 @@ void QPProblemManager::configure(
   u_optimal_.resize(params_->prediction_horizon * params_->nu);
 }
 
-void QPProblemManager::update(
+void QPProblem::update(
   const Eigen::MatrixXd& B,
   const Eigen::VectorXd& state_error, 
   const Eigen::MatrixXd& Q,
@@ -42,7 +42,7 @@ void QPProblemManager::update(
 }
 
 
-Eigen::VectorXd QPProblemManager::solve()
+Eigen::VectorXd QPProblem::solve()
 {
   osqp_solver_.solve(u_optimal_);
   return u_optimal_;
