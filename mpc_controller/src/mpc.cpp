@@ -56,9 +56,8 @@ void MPC::updateState(
 
   // Define system dynamic
   A_.resize(params_->nx, params_->nx);
-  double linear_vel = robot_velocity.linear.x;
-  double a13 = -linear_vel * std::sin(yaw) * params_->dt;
-  double a23 = linear_vel * std::cos(yaw) * params_->dt;
+  double a13 = -1 * std::sin(yaw) * params_->dt;
+  double a23 = std::cos(yaw) * params_->dt;
   A_ << 1, 0, a13,
         0, 1, a23,
         0, 0, 1;
