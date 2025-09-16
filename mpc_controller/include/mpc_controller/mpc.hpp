@@ -61,14 +61,18 @@ private:
 
   Eigen::MatrixXd stackMatrixA(
     const Eigen::MatrixXd& A, 
-    const Eigen::MatrixXd& C);
+    const Eigen::MatrixXd& C, 
+    const int& factor);
   
   Eigen::MatrixXd stackMatrixB(
     const Eigen::MatrixXd& A, 
     const Eigen::MatrixXd& B, 
-    const Eigen::MatrixXd& C);
+    const Eigen::MatrixXd& C, 
+    const int& factor);
 
-  Eigen::MatrixXd stackWeightMatrix(const Eigen::MatrixXd &matrix);
+  Eigen::MatrixXd stackWeightMatrix(
+    const Eigen::MatrixXd& matrix, 
+    const int& factor);
 
   Eigen::VectorXd propagateSystemState(
     const Eigen::MatrixXd& A,

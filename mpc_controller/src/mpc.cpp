@@ -127,11 +127,11 @@ geometry_msgs::msg::Twist MPC::computeControl(){
   // =======================
   // === System stacking ===
   // =======================
-  A_stacked_ = stackMatrixA(A_, C_);
-  B_stacked_ = stackMatrixB(A_, B_, C_);
+  A_stacked_ = stackMatrixA(A_, C_, params_->prediction_horizon);
+  B_stacked_ = stackMatrixB(A_, B_, C_, params_->prediction_horizon);
 
-  Eigen::MatrixXd Q_stacked = stackWeightMatrix(Q_);
-  Eigen::MatrixXd R_stacked = stackWeightMatrix(R_);
+  Eigen::MatrixXd Q_stacked = stackWeightMatrix(Q_, params_->prediction_horizon);
+  Eigen::MatrixXd R_stacked = stackWeightMatrix(R_, params_->prediction_horizon);
 
   Eigen::VectorXd lower_bound_stacked = lower_bound_constraints_.replicate(params_->prediction_horizon, 1);
   Eigen::VectorXd upper_bound_stacked = upper_bound_constraints_.replicate(params_->prediction_horizon, 1);
@@ -181,7 +181,8 @@ geometry_msgs::msg::Twist MPC::computeControl(){
 
 Eigen::MatrixXd MPC::stackMatrixA(
   const Eigen::MatrixXd& A,
-  const Eigen::MatrixXd& C)
+  const Eigen::MatrixXd& C, 
+  const int& horizon)
 {
   int A_rows_number = A.rows();
   int A_cols_number = A.cols();
@@ -189,10 +190,12 @@ Eigen::MatrixXd MPC::stackMatrixA(
   Eigen::MatrixXd A_pow(A_rows_number, A_cols_number);
   A_pow << A;
 
-  Eigen::MatrixXd A_blk(params_->prediction_horizon * C_rows_number, A_cols_number);
+  Eigen::MatrixXd A_blk(horizon * C_rows_number, A_cols_number);
   A_blk.setZero();
-  for(int predict_step = 0; predict_step < params_->prediction_horizon; predict_step++){
-      A_blk.block(predict_step * C_rows_number, 0, C_rows_number, A_cols_number) = C * A_pow;
+  for(int predict_step = 0; predict_step < horizon; predict_step++){
+      A_blk.block(
+        predict_step * C_rows_number, 0,
+        C_rows_number, A_cols_number) = C * A_pow;
       A_pow *= A;
   }
   return A_blk;
@@ -202,7 +205,8 @@ Eigen::MatrixXd MPC::stackMatrixA(
 Eigen::MatrixXd MPC::stackMatrixB(
   const Eigen::MatrixXd& A,
   const Eigen::MatrixXd& B,
-  const Eigen::MatrixXd& C)
+  const Eigen::MatrixXd& C, 
+  const int& horizon)
 {
   int A_rows_number = A.rows();
   int A_cols_number = A.cols();
@@ -211,14 +215,16 @@ Eigen::MatrixXd MPC::stackMatrixB(
   A_pow.setZero();
 
   int B_cols_number = B.cols();
-  Eigen::MatrixXd B_blk(params_->prediction_horizon * C_rows_number, 
-    params_->prediction_horizon * B_cols_number);
+  Eigen::MatrixXd B_blk(
+    horizon * C_rows_number, 
+    horizon * B_cols_number);
   B_blk.setZero();
-  for(int state_step = 0; state_step < params_->prediction_horizon; state_step++){
+  for(int state_step = 0; state_step < horizon; state_step++){
     A_pow << Eigen::MatrixXd::Identity(A_pow.rows(), A_pow.cols());
-    for(int predict_step = 0; predict_step < params_->prediction_horizon - state_step; predict_step++){
-      B_blk.block((predict_step + state_step) * C_rows_number, state_step * B_cols_number,
-      C_rows_number, B_cols_number) = C * A_pow * B;
+    for(int predict_step = 0; predict_step < horizon - state_step; predict_step++){
+      B_blk.block(
+        (predict_step + state_step) * C_rows_number, state_step * B_cols_number,
+        C_rows_number, B_cols_number) = C * A_pow * B;
       A_pow *= A;
     }
   }
@@ -226,12 +232,15 @@ Eigen::MatrixXd MPC::stackMatrixB(
 }
 
 
-Eigen::MatrixXd MPC::stackWeightMatrix(const Eigen::MatrixXd& matrix){
+Eigen::MatrixXd MPC::stackWeightMatrix(
+  const Eigen::MatrixXd& matrix, 
+  const int& horizon)
+{
   int matrix_rows = matrix.rows();
   int matrix_cols = matrix.cols();
-  Eigen::MatrixXd matrix_blk(params_->prediction_horizon * matrix_rows, params_->prediction_horizon * matrix_cols);
+  Eigen::MatrixXd matrix_blk(horizon * matrix_rows, horizon * matrix_cols);
   matrix_blk.setZero();
-  for(int predict_step = 0; predict_step < params_->prediction_horizon; predict_step++){
+  for(int predict_step = 0; predict_step < horizon; predict_step++){
     matrix_blk.block(
       predict_step * matrix_rows, predict_step * matrix_cols, 
       matrix_rows, matrix_cols) = matrix;
