@@ -87,28 +87,28 @@ void MPC::updateState(
     // y_k = [C 0]*[x_k  ]
     //             [u_K-1] 
 
-    int A_rows_number = A_.rows();
-    int A_cols_number = A_.cols();
+    int A_rows = A_.rows();
+    int A_cols = A_.cols();
     int B_rows_number = B_.rows();
-    int B_cols_number = B_.cols();
-    Eigen::MatrixXd A_augmented(A_rows_number + B_cols_number, A_cols_number + B_cols_number);
+    int B_cols = B_.cols();
+    Eigen::MatrixXd A_augmented(A_rows + B_cols, A_cols + B_cols);
     A_augmented.setZero();
-    A_augmented.block(0, 0, A_rows_number, A_cols_number) = A_;
-    A_augmented.block(0, A_cols_number, B_rows_number, B_cols_number) = B_;
-    A_augmented.block(A_rows_number, A_cols_number, B_cols_number, B_cols_number) =
-      Eigen::MatrixXd::Identity(B_cols_number, B_cols_number);
+    A_augmented.block(0, 0, A_rows, A_cols) = A_;
+    A_augmented.block(0, A_cols, B_rows_number, B_cols) = B_;
+    A_augmented.block(A_rows, A_cols, B_cols, B_cols) =
+      Eigen::MatrixXd::Identity(B_cols, B_cols);
 
-    Eigen::MatrixXd B_augmented(B_rows_number + B_cols_number, B_cols_number);
+    Eigen::MatrixXd B_augmented(B_rows_number + B_cols, B_cols);
     B_augmented.setZero();
-    B_augmented.block(0, 0, B_rows_number, B_cols_number) = B_;
-    B_augmented.block(B_rows_number, 0, B_cols_number, B_cols_number) =
-      Eigen::MatrixXd::Identity(B_cols_number, B_cols_number);
+    B_augmented.block(0, 0, B_rows_number, B_cols) = B_;
+    B_augmented.block(B_rows_number, 0, B_cols, B_cols) =
+      Eigen::MatrixXd::Identity(B_cols, B_cols);
 
-    int C_rows_number = C_.rows();
-    int C_cols_number = C_.cols();
-    Eigen::MatrixXd C_augmented(C_rows_number, C_cols_number + B_cols_number);
+    int C_rows = C_.rows();
+    int C_cols = C_.cols();
+    Eigen::MatrixXd C_augmented(C_rows, C_cols + B_cols);
     C_augmented.setZero();
-    C_augmented.block(0, 0, C_rows_number, C_cols_number) = C_;
+    C_augmented.block(0, 0, C_rows, C_cols) = C_;
 
     Eigen::VectorXd X_augmented(params_->nx + params_->nu);
     X_augmented.segment(0, params_->nx) = X_init_;
@@ -184,18 +184,18 @@ Eigen::MatrixXd MPC::stackMatrixA(
   const Eigen::MatrixXd& C, 
   const int& horizon)
 {
-  int A_rows_number = A.rows();
-  int A_cols_number = A.cols();
-  int C_rows_number = C.rows();
-  Eigen::MatrixXd A_pow(A_rows_number, A_cols_number);
+  int A_rows = A.rows();
+  int A_cols = A.cols();
+  int C_rows = C.rows();
+  Eigen::MatrixXd A_pow(A_rows, A_cols);
   A_pow << A;
 
-  Eigen::MatrixXd A_blk(horizon * C_rows_number, A_cols_number);
+  Eigen::MatrixXd A_blk(horizon * C_rows, A_cols);
   A_blk.setZero();
   for(int predict_step = 0; predict_step < horizon; predict_step++){
       A_blk.block(
-        predict_step * C_rows_number, 0,
-        C_rows_number, A_cols_number) = C * A_pow;
+        predict_step * C_rows, 0,
+        C_rows, A_cols) = C * A_pow;
       A_pow *= A;
   }
   return A_blk;
@@ -208,23 +208,23 @@ Eigen::MatrixXd MPC::stackMatrixB(
   const Eigen::MatrixXd& C, 
   const int& horizon)
 {
-  int A_rows_number = A.rows();
-  int A_cols_number = A.cols();
-  int C_rows_number = C.rows();
-  Eigen::MatrixXd A_pow(A_rows_number, A_cols_number);
+  int A_rows = A.rows();
+  int A_cols = A.cols();
+  int C_rows = C.rows();
+  Eigen::MatrixXd A_pow(A_rows, A_cols);
   A_pow.setZero();
 
-  int B_cols_number = B.cols();
+  int B_cols = B.cols();
   Eigen::MatrixXd B_blk(
-    horizon * C_rows_number, 
-    horizon * B_cols_number);
+    horizon * C_rows, 
+    horizon * B_cols);
   B_blk.setZero();
   for(int state_step = 0; state_step < horizon; state_step++){
     A_pow << Eigen::MatrixXd::Identity(A_pow.rows(), A_pow.cols());
     for(int predict_step = 0; predict_step < horizon - state_step; predict_step++){
       B_blk.block(
-        (predict_step + state_step) * C_rows_number, state_step * B_cols_number,
-        C_rows_number, B_cols_number) = C * A_pow * B;
+        (predict_step + state_step) * C_rows, state_step * B_cols,
+        C_rows, B_cols) = C * A_pow * B;
       A_pow *= A;
     }
   }
