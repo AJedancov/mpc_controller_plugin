@@ -36,7 +36,7 @@ void QPProblem::update(
   f_ = 2 * B.transpose() * Q * state_error;
 
   int B_cols = B.cols();
-  D_ << Eigen::MatrixXd::Identity(B_cols, B_cols);
+  D_.setIdentity(B_cols, B_cols);
 
   osqp_solver_.setup(H_, f_, D_, lower_bound, upper_bound);
 }

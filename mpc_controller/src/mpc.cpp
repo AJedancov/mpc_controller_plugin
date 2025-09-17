@@ -95,14 +95,12 @@ void MPC::updateState(
     A_augmented.setZero();
     A_augmented.block(0, 0, A_rows, A_cols) = A_;
     A_augmented.block(0, A_cols, B_rows_number, B_cols) = B_;
-    A_augmented.block(A_rows, A_cols, B_cols, B_cols) =
-      Eigen::MatrixXd::Identity(B_cols, B_cols);
+    A_augmented.block(A_rows, A_cols, B_cols, B_cols).setIdentity();
 
     Eigen::MatrixXd B_augmented(B_rows_number + B_cols, B_cols);
     B_augmented.setZero();
     B_augmented.block(0, 0, B_rows_number, B_cols) = B_;
-    B_augmented.block(B_rows_number, 0, B_cols, B_cols) =
-      Eigen::MatrixXd::Identity(B_cols, B_cols);
+    B_augmented.block(B_rows_number, 0, B_cols, B_cols).setIdentity();
 
     int C_rows = C_.rows();
     int C_cols = C_.cols();
@@ -220,7 +218,7 @@ Eigen::MatrixXd MPC::stackMatrixB(
     horizon * B_cols);
   B_blk.setZero();
   for(int state_step = 0; state_step < horizon; state_step++){
-    A_pow << Eigen::MatrixXd::Identity(A_pow.rows(), A_pow.cols());
+    A_pow.setIdentity(A_rows, A_cols);
     for(int predict_step = 0; predict_step < horizon - state_step; predict_step++){
       B_blk.block(
         (predict_step + state_step) * C_rows, state_step * B_cols,
