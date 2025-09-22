@@ -79,6 +79,11 @@ private:
     const Eigen::MatrixXd& B,
     const Eigen::VectorXd& x,
     const Eigen::VectorXd& u);
+
+  void normalizeAngles(
+    Eigen::VectorXd& state_vector, 
+    const int& state_ordinal_number,
+    const int& horizon);
 };
 
 #endif // SYSTEM_MODELS_HPP_

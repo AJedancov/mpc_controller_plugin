@@ -143,6 +143,8 @@ geometry_msgs::msg::Twist MPC::computeControl(){
   // === QP problem ===
   // ==================
   Eigen::VectorXd state_error = A_stacked_ * X_init_ - X_ref_;
+  int state_ordinal_number = 2;
+  normalizeAngles(state_error, state_ordinal_number, params_->prediction_horizon);
 
   qp_problem_.update(
     B_stacked_, 
@@ -259,4 +261,22 @@ Eigen::VectorXd MPC::propagateSystemState(
 
 Eigen::VectorXd MPC::getOptimalTrajectory(){
   return X_pred_;
+}
+
+
+void MPC::normalizeAngles(
+  Eigen::VectorXd& state_vector, 
+  const int& state_ordinal_number,
+  const int& horizon)
+{
+  int state_vector_size = state_vector.rows() / horizon;
+  for(int predict_step = 0; predict_step < horizon; predict_step++){
+    double& angle = state_vector[predict_step * state_vector_size + state_ordinal_number];
+    if(angle > M_PI){
+      angle -= 2 * M_PI;
+    }  
+    if(angle < -M_PI){
+      angle += 2 * M_PI;
+    }
+  }
 }
