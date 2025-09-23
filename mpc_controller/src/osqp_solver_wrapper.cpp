@@ -11,8 +11,8 @@ osqp::OSQPSolverWrapper::OSQPSolverWrapper():
 
 
 osqp::OSQPSolverWrapper::~OSQPSolverWrapper(){
-  OSQPCscMatrix_free(H_osqp_csc_);
-  OSQPCscMatrix_free(D_osqp_csc_);
+  osqp_cleanup(osqp_solver_);
+  OSQPSettings_free(settings_);
 }
 
 
@@ -21,25 +21,25 @@ void osqp::OSQPSolverWrapper::setup(
   Eigen::MatrixXd& D, const Eigen::VectorXd& lb, const Eigen::VectorXd& ub)
 {
   H.triangularView<Eigen::StrictlyLower>().setZero();
-  Eigen::SparseMatrix<OSQPFloat, Eigen::ColMajor, OSQPInt> H_csc = H.sparseView();
+  H_csc_ = H.sparseView();
   H_osqp_csc_ = OSQPCscMatrix_new(
     H.rows(),
     H.cols(),
-    H_csc.nonZeros(),
-    H_csc.valuePtr(),      // Values
-    H_csc.innerIndexPtr(), // Row indices
-    H_csc.outerIndexPtr()  // Pointers 
+    H_csc_.nonZeros(),
+    H_csc_.valuePtr(),      // Values
+    H_csc_.innerIndexPtr(), // Row indices
+    H_csc_.outerIndexPtr()  // Pointers 
   );
   
   D.triangularView<Eigen::StrictlyLower>().setZero();
-  Eigen::SparseMatrix<OSQPFloat, Eigen::ColMajor, OSQPInt> D_csc = D.sparseView();
+  D_csc_ = D.sparseView();
   D_osqp_csc_ = OSQPCscMatrix_new(
     D.rows(),
     D.cols(),
-    D_csc.nonZeros(),
-    D_csc.valuePtr(),
-    D_csc.innerIndexPtr(),
-    D_csc.outerIndexPtr()
+    D_csc_.nonZeros(),
+    D_csc_.valuePtr(),
+    D_csc_.innerIndexPtr(),
+    D_csc_.outerIndexPtr()
   );
 
   f_osqp_ = f.data();
@@ -63,8 +63,9 @@ void osqp::OSQPSolverWrapper::setup(
 
 void osqp::OSQPSolverWrapper::solve(Eigen::VectorXd& u){
   osqp_solve(osqp_solver_);
-  
   for(int i = 0; i < number_variables_; i++){
     u[i] = osqp_solver_->solution->x[i];
   }
+  OSQPCscMatrix_free(H_osqp_csc_);
+  OSQPCscMatrix_free(D_osqp_csc_);
 }
