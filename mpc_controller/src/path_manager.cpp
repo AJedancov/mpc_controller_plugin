@@ -145,19 +145,19 @@ int PathManager::findReferenceWaypointIndex(
   double ref_wp_dist = std::numeric_limits<double>::max();
   for(int i = 0; i < waypoints_num_ - 1; i++){
 
-    double x_rob = robot_pose.pose.position.x;
-    double y_rob = robot_pose.pose.position.y;
+    std::array<double, 2> v_rob = getVectorFromPoints(
+      global_path_.poses[i].pose.position,
+      robot_pose.pose.position);
 
-    double x_gp_i0 = global_path_.poses[i].pose.position.x;
-    double y_gp_i0 = global_path_.poses[i].pose.position.y;
+    std::array<double, 2> v_wps = getVectorFromPoints(
+      global_path_.poses[i].pose.position, 
+      global_path_.poses[i + 1].pose.position);
 
-    double x_gp_i1 = global_path_.poses[i + 1].pose.position.x;
-    double y_gp_i1 = global_path_.poses[i + 1].pose.position.y;
-    double hypot = std::hypot(x_rob - x_gp_i0, y_rob - y_gp_i0);
-
-    std::vector<double> v_rob = {x_rob - x_gp_i0, y_rob - y_gp_i0}; // vector from i waypoint to robot
-    std::vector<double> v_wps = {x_gp_i1 - x_gp_i0, y_gp_i1 - y_gp_i0}; // vector from i waypoint to i+1 waypoint along path
     double ip_rob = std::inner_product(v_rob.begin(), v_rob.end(), v_wps.begin(), 0.0);
+    
+    double dx = robot_pose.pose.position.x - global_path_.poses[i].pose.position.x;
+    double dy = robot_pose.pose.position.y - global_path_.poses[i].pose.position.y;
+    double hypot = std::hypot(dx, dy);
     if (hypot < ref_wp_dist && ip_rob >= 0){
       ref_wp_dist = hypot;
       ref_wp_idx = i;
@@ -176,22 +176,22 @@ PathManager::findProjectionPoint(
   projection_point.header.frame_id = global_path_.header.frame_id;
   projection_point.header.stamp = clock_->now();
 
-  double x_rob = robot_pose.pose.position.x;
-  double y_rob = robot_pose.pose.position.y;
+  std::array<double, 2> v_rob = getVectorFromPoints(
+    global_path_.poses[ref_wp_idx].pose.position, 
+    robot_pose.pose.position);
+  
+  std::array<double, 2> v_wps = getVectorFromPoints(
+    global_path_.poses[ref_wp_idx].pose.position, 
+    global_path_.poses[ref_wp_idx + 1].pose.position);
 
+  double ip_rob = std::inner_product(v_rob.begin(), v_rob.end(), v_wps.begin(), 0.0);
+  double ip_wp = std::inner_product(v_wps.begin(), v_wps.end(), v_wps.begin(), 0.0);
+  double ratio = ip_rob / ip_wp;
   double x_gp_i0 = global_path_.poses[ref_wp_idx].pose.position.x;
   double y_gp_i0 = global_path_.poses[ref_wp_idx].pose.position.y;
-
   double x_gp_i1 = global_path_.poses[ref_wp_idx + 1].pose.position.x;
   double y_gp_i1 = global_path_.poses[ref_wp_idx + 1].pose.position.y;
 
-  std::vector<double> v_rob = {x_rob - x_gp_i0, y_rob - y_gp_i0}; // vector from i waypoint to robot
-  std::vector<double> v_wps = {x_gp_i1 - x_gp_i0, y_gp_i1 - y_gp_i0}; // vector from i waypoint to i+1 waypoint along path
-  
-  double ip_rob = std::inner_product(v_rob.begin(), v_rob.end(), v_wps.begin(), 0.0);
-  double ip_wp = std::inner_product(v_wps.begin(), v_wps.end(), v_wps.begin(), 0.0);
-    
-  double ratio = ip_rob / ip_wp;
   projection_point.pose.position.x = lerp(x_gp_i0, x_gp_i1, ratio);
   projection_point.pose.position.y = lerp(y_gp_i0, y_gp_i1, ratio);
   projection_point.pose.position.z = 0;

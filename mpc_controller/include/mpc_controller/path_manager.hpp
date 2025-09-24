@@ -50,6 +50,14 @@ private:
   inline TypeT lerp(TypeT first_point, TypeT second_point, TypeT ratio){
     return first_point + ratio * (second_point - first_point);
   }
+
+  inline std::array<double, 2> getVectorFromPoints(
+    const geometry_msgs::msg::Point& begin,
+    const geometry_msgs::msg::Point& end)
+  {
+    return std::array<double, 2> {end.x - begin.x, end.y - begin.y};
+  }
+
   
   nav_msgs::msg::Path convertEigenVectorToPathMsg(const Eigen::VectorXd& reference_path);
 
