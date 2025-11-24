@@ -51,6 +51,7 @@ private:
   Eigen::MatrixXd B_stacked_;
 
   Eigen::MatrixXd Q_;
+  Eigen::MatrixXd Q_term_;
   Eigen::MatrixXd R_;
 
   Eigen::VectorXd lower_bound_constraints_;

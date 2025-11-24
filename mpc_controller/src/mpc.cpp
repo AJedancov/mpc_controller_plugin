@@ -26,6 +26,7 @@ void MPC::configure(
     params_->prediction_horizon * params_->nu);
   
   Q_.resize(params_->ny, params_->ny);
+  Q_term_.resize(params_->ny, params_->ny);
   R_.resize(params_->nu, params_->nu);
 
   lower_bound_constraints_.resize(params_->nu);
@@ -72,8 +73,10 @@ void MPC::updateState(
   C_.setIdentity(params_->ny, params_->nx);
 
   std::vector<double> q = params_->state_weights_diag;
+  std::vector<double> q_term = params_->state_weights_term_diag;
   std::vector<double> r = params_->control_weights_diag;
   Q_ = Eigen::Map<Eigen::VectorXd>(q.data(), q.size()).asDiagonal();
+  Q_term_ = Eigen::Map<Eigen::VectorXd>(q_term.data(), q_term.size()).asDiagonal();
   R_ = Eigen::Map<Eigen::VectorXd>(r.data(), r.size()).asDiagonal();
 
   lower_bound_constraints_ << params_->min_lin_vel, params_->min_ang_vel;
@@ -130,6 +133,12 @@ geometry_msgs::msg::Twist MPC::computeControl(){
 
   Eigen::MatrixXd Q_stacked = stackWeightMatrix(Q_, params_->prediction_horizon);
   Eigen::MatrixXd R_stacked = stackWeightMatrix(R_, params_->prediction_horizon);
+
+  int predict_step = params_->prediction_horizon - 1;
+  Q_stacked.block(
+    predict_step * Q_.rows(), predict_step * Q_.cols(), 
+    Q_.rows(), Q_.cols()) = Q_term_;
+
 
   Eigen::VectorXd lower_bound_stacked = lower_bound_constraints_.replicate(params_->prediction_horizon, 1);
   Eigen::VectorXd upper_bound_stacked = upper_bound_constraints_.replicate(params_->prediction_horizon, 1);
